@@ -7,6 +7,10 @@
   "author": {
     "name": "Lucas Martinati"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LucasM548/Pseudo-Code-Extension-VSC"
+  },
   "icon": "icons/icon.png",
   "engines": {
     "vscode": "^1.104.0"
