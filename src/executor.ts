@@ -6,8 +6,8 @@ import { exec } from 'child_process';
 
 /**
  * Transpile le code Pseudo-Code en code Lua exécutable.
- * VERSION CORRIGÉE : Utilise une pile de blocs pour gérer correctement la différence
- * entre 'Algorithme' et 'Fonction', garantissant la suppression de la structure de l'algorithme.
+ * VERSION CORRIGÉE : Utilise une boucle de remplacement itérative pour gérer
+ * correctement les appels de fonctions imbriquées et éviter les erreurs de syntaxe.
  * @param pscCode Le code source en Pseudo-Code.
  * @returns Le code Lua transpilé.
  */
@@ -18,47 +18,40 @@ function transpileToLua(pscCode: string): string {
 
     let luaCode = '';
     const lines = cleanedCode.split('\n');
-
+    
     let isInsideAlgorithmBlock = false;
 
     for (const line of lines) {
         let trimmedLine = line.trim();
 
-        // Règle 1: Détecter le début et la fin du bloc Algorithme à ignorer
         if (/^\s*algorithme\b/i.test(trimmedLine)) {
             isInsideAlgorithmBlock = true;
-            continue; // On ignore la ligne "Algorithme..."
+            continue;
         }
-
-        // Si on est dans le bloc algorithme, on cherche sa fin
         if (isInsideAlgorithmBlock) {
             if (/^\s*Fin\b/i.test(trimmedLine)) {
                 isInsideAlgorithmBlock = false;
             }
-            continue; // On ignore cette ligne, qu'elle soit le "Fin" ou une ligne de contenu
-        }
-
-        // Si nous sommes ici, la ligne n'appartient pas à un bloc Algorithme et doit être traitée.
-
-        // Ignorer les lignes vides et les 'Début'
-        if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine)) {
             continue;
         }
 
-        // Gérer les commentaires
+        if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine)) {
+            continue;
+        }
         if (/^\s*\/\//.test(trimmedLine)) {
             luaCode += line.replace(/^\s*\/\//, '--') + '\n';
             continue;
         }
-
-        // Gérer les mots-clés de fin de bloc de fonction
         if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
             luaCode += line.replace(/^\s*\S+/, 'end') + '\n';
             continue;
         }
-
-        // --- TRADUCTION DU CODE ---
+        
         let isForLoop = false;
+
+        // --- TRADUCTION DE LA SYNTAXE ---
+        
+        trimmedLine = trimmedLine.replace(/[“”]/g, '"');
 
         if (/^\s*fonction\s/i.test(trimmedLine)) {
             const signaturePart = trimmedLine.substring(trimmedLine.toLowerCase().indexOf('fonction ') + 'fonction '.length);
@@ -109,7 +102,19 @@ function transpileToLua(pscCode: string): string {
         else if (/^\s*Sinon\b/i.test(trimmedLine)) {
             trimmedLine = trimmedLine.replace(/^\s*Sinon\b\s*:?/i, 'else');
         }
+        
+        // **NOUVEAU : Boucle de remplacement itérative pour les fonctions imbriquées**
+        let previousLine;
+        do {
+            previousLine = trimmedLine;
+            trimmedLine = trimmedLine
+                .replace(/longueur\s*\(([^)]+)\)/gi, '#($1)')
+                .replace(/concat\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, '$1 .. $2')
+                .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, ($2) + ($3) - 1)')
+                .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)');
+        } while (previousLine !== trimmedLine);
 
+        // Opérateurs
         trimmedLine = trimmedLine
             .replace(/\bretourne\b/gi, 'return').replace(/\bretourner\b/gi, 'return')
             .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
@@ -117,24 +122,19 @@ function transpileToLua(pscCode: string): string {
             .replace(/\bet\b/gi, 'and').replace(/\bmod\b/gi, '%')
             .replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=')
             .replace(/÷/g, '//');
-
+        
         if (!isForLoop) {
             trimmedLine = trimmedLine.replace(/(?<![<>~=])=(?!=)/g, '==');
         }
         trimmedLine = trimmedLine.replace(/\s*←\s*/g, ' = ');
-
-        trimmedLine = trimmedLine.replace(/\[\s*\]/g, '{}');
-        trimmedLine = trimmedLine.replace(/(\w+)\[([^,\]]+)\s*,\s*([^\]]+)\]/g, '$1[($2)+1][($3)+1]');
-        trimmedLine = trimmedLine.replace(/(\w+)\[([^,\]]+)\]/g, '$1[($2)+1]');
-
+        
+        // Tableaux et I/O
         trimmedLine = trimmedLine
+            .replace(/\[\s*\]/g, '{}')
+            .replace(/(\w+)\[([^,\]]+)\s*,\s*([^\]]+)\]/g, '$1[($2)+1][($3)+1]')
+            .replace(/(\w+)\[([^,\]]+)\]/g, '$1[($2)+1]')
             .replace(/lire\s*\(\)/gi, 'io.read()')
-            .replace(/écrire\s*\((.*)\)/gi, 'print($1)')
-            .replace(/longueur\s*\((.+)\)/gi, '#($1)')
-            .replace(/concat\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, '$1 .. $2')
-            .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, ($2) + ($3) - 1)')
-            .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)')
-            .replace(/remplace\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, '$1 = string.sub($1, 1, ($2)-1) .. ($3) .. string.sub($1, ($2)+1)');
+            .replace(/écrire\s*\((.*)\)/gi, 'print($1)');
 
         const indentation = line.match(/^\s*/)?.[0] || '';
         luaCode += indentation + trimmedLine + '\n';
@@ -157,7 +157,7 @@ export function executeCode(document: vscode.TextDocument) {
 
     const terminal = vscode.window.createTerminal("Pseudo-Code Execution");
     terminal.show();
-
+    
     const command = `lua "${tempFilePath}"`;
     terminal.sendText(command);
 }
