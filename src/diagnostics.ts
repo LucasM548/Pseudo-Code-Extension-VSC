@@ -22,15 +22,23 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
 
     for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
         const line = doc.lineAt(lineIndex);
-        const text = line.text;
+        
+        // --- CORRECTION APPLIQUÉE ICI ---
+        // On ne garde que la partie de la ligne avant un commentaire
+        let text = line.text;
+        const commentIndex = text.indexOf('//');
+        if (commentIndex !== -1) {
+            text = text.substring(0, commentIndex);
+        }
+        // --- FIN DE LA CORRECTION ---
 
-        // On cherche un mot-clé d'ouverture
+        // On cherche un mot-clé d'ouverture dans le texte nettoyé
         const openingMatch = openingKeywords.find(kw => new RegExp(`\\b${kw}\\b`, 'i').test(text));
         if (openingMatch) {
             blockStack.push({ keyword: openingMatch, line: lineIndex, range: line.range });
         }
 
-        // On cherche un mot-clé de fermeture
+        // On cherche un mot-clé de fermeture dans le texte nettoyé
         const closingMatch = closingKeywords.find(kw => new RegExp(`\\b${kw}\\b`, 'i').test(text));
         if (closingMatch) {
             const lastOpener = blockStack.pop();

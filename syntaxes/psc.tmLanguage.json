@@ -5,10 +5,10 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#function-call" },
     { "include": "#keywords" },
     { "include": "#storage" },
     { "include": "#declarations" },
-    { "include": "#function-call" },
     { "include": "#constants" },
     { "include": "#operators" },
     { "include": "#variables" }
