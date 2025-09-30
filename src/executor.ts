@@ -18,7 +18,7 @@ function transpileToLua(pscCode: string): string {
 
     let luaCode = '';
     const lines = cleanedCode.split('\n');
-    
+
     let isInsideAlgorithmBlock = false;
 
     for (const line of lines) {
@@ -29,7 +29,7 @@ function transpileToLua(pscCode: string): string {
             isInsideAlgorithmBlock = true;
             continue; // On ignore la ligne "Algorithme..."
         }
-        
+
         // Si on est dans le bloc algorithme, on cherche sa fin
         if (isInsideAlgorithmBlock) {
             if (/^\s*Fin\b/i.test(trimmedLine)) {
@@ -39,7 +39,7 @@ function transpileToLua(pscCode: string): string {
         }
 
         // Si nous sommes ici, la ligne n'appartient pas à un bloc Algorithme et doit être traitée.
-        
+
         // Ignorer les lignes vides et les 'Début'
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine)) {
             continue;
@@ -56,7 +56,7 @@ function transpileToLua(pscCode: string): string {
             luaCode += line.replace(/^\s*\S+/, 'end') + '\n';
             continue;
         }
-        
+
         // --- TRADUCTION DU CODE ---
         let isForLoop = false;
 
@@ -109,7 +109,7 @@ function transpileToLua(pscCode: string): string {
         else if (/^\s*Sinon\b/i.test(trimmedLine)) {
             trimmedLine = trimmedLine.replace(/^\s*Sinon\b\s*:?/i, 'else');
         }
-        
+
         trimmedLine = trimmedLine
             .replace(/\bretourne\b/gi, 'return').replace(/\bretourner\b/gi, 'return')
             .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
@@ -117,12 +117,12 @@ function transpileToLua(pscCode: string): string {
             .replace(/\bet\b/gi, 'and').replace(/\bmod\b/gi, '%')
             .replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=')
             .replace(/÷/g, '//');
-        
+
         if (!isForLoop) {
             trimmedLine = trimmedLine.replace(/(?<![<>~=])=(?!=)/g, '==');
         }
         trimmedLine = trimmedLine.replace(/\s*←\s*/g, ' = ');
-        
+
         trimmedLine = trimmedLine.replace(/\[\s*\]/g, '{}');
         trimmedLine = trimmedLine.replace(/(\w+)\[([^,\]]+)\s*,\s*([^\]]+)\]/g, '$1[($2)+1][($3)+1]');
         trimmedLine = trimmedLine.replace(/(\w+)\[([^,\]]+)\]/g, '$1[($2)+1]');
@@ -157,7 +157,7 @@ export function executeCode(document: vscode.TextDocument) {
 
     const terminal = vscode.window.createTerminal("Pseudo-Code Execution");
     terminal.show();
-    
+
     const command = `lua "${tempFilePath}"`;
     terminal.sendText(command);
 }
