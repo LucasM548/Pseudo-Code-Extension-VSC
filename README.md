@@ -78,7 +78,7 @@ Lorsque vous tapez une ligne qui ouvre un bloc (comme `Pour ... Faire :`) et que
 
 1.  Ouvrez **Visual Studio Code**.
 2.  Allez dans le panneau des **Extensions** (`Ctrl+Shift+X`).
-3.  Recherchez `Pseudo-Code Language Support` (ou le nom que vous lui donnerez).
+3.  Recherchez `Pseudo-Code Language Support`.
 4.  Cliquez sur **Installer**.
 5.  Redémarrez VS Code et ouvrez un fichier `.psc` pour commencer !
 
