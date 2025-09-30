@@ -66,6 +66,13 @@
         "displayName": "PSC Formatter",
         "id": "psc-formatter"
       }
+    ],
+    "commands": [
+      {
+        "command": "psc.execute",
+        "title": "Exécuter le fichier Pseudo-Code",
+        "category": "PSC"
+      }
     ]
   },
   "scripts": {
