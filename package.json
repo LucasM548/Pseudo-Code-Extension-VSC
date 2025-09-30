@@ -1,0 +1,78 @@
+{
+  "name": "pseudocode-support",
+  "displayName": "PseudoCode Language Support",
+  "description": "Advanced syntax highlighting, intelligent snippets and symbol navigation for the PSC language.",
+  "version": "0.0.1",
+  "publisher": "Lucas_M54",
+  "author": {
+    "name": "Lucas Martinati"
+  },
+  "icon": "icons/icon.png",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:psc"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "psc",
+        "aliases": [
+          "PseudoCode",
+          "psc"
+        ],
+        "extensions": [
+          ".psc"
+        ],
+        "configuration": "./language-configuration.json",
+        "symbols": {
+          "comments": {
+            "lineComment": "//"
+          },
+          "brackets": [
+            [
+              "Début",
+              "Fin"
+            ]
+          ]
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "psc",
+        "scopeName": "source.psc",
+        "path": "./syntaxes/psc.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "psc",
+        "path": "./snippets/psc.json"
+      }
+    ],
+    "formatters": [
+      {
+        "language": "psc",
+        "displayName": "PSC Formatter",
+        "id": "psc-formatter"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^24.6.0",
+    "@types/vscode": "^1.104.0",
+    "typescript": "^5.9.2"
+  }
+}

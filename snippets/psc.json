@@ -1,0 +1,65 @@
+
+{
+  "Algorithme principal": {
+    "prefix": "algorithme",
+    "body": [
+      "Algorithme ${1:NomPrincipal}",
+      "Début",
+      "\t$0",
+      "Fin",
+      "Lexique :",
+      "\t${2:variable} : ${3:type}"
+    ],
+    "description": "Crée une structure d'algorithme principal."
+  },
+  "Fonction complète": {
+    "prefix": "fonction",
+    "body": [
+      "Fonction ${1:nomFonction}(${2:paramètres}) : ${3:typeRetour}",
+      "Début",
+      "\t$0",
+      "Fin",
+      "Lexique :",
+      "\t${4:variable} : ${5:type}"
+    ],
+    "description": "Crée une structure de fonction complète avec lexique."
+  },
+  "Boucle Pour": {
+    "prefix": "pour",
+    "body": [
+      "Pour ${1:i} de ${2:début} à ${3:fin} Faire :",
+      "\t$0",
+      "fpour"
+    ],
+    "description": "Crée une boucle Pour."
+  },
+  "Boucle Tant que": {
+    "prefix": "tantque",
+    "body": [
+      "Tant que ${1:condition} Faire :",
+      "\t$0",
+      "ftq"
+    ],
+    "description": "Crée une boucle Tant que."
+  },
+  "Structure Si/Alors": {
+    "prefix": "si",
+    "body": [
+      "Si ${1:condition} Alors :",
+      "\t$0",
+      "fsi"
+    ],
+    "description": "Crée une structure conditionnelle Si/Alors."
+  },
+  "Structure Si/Alors/Sinon": {
+    "prefix": "sisinon",
+    "body": [
+      "Si ${1:condition} Alors :",
+      "\t${2:/* instructions si vrai */}",
+      "Sinon :",
+      "\t${3:/* instructions si faux */}",
+      "fsi"
+    ],
+    "description": "Crée une structure conditionnelle Si/Alors/Sinon."
+  }
+}

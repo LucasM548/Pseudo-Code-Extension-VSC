@@ -1,0 +1,45 @@
+{
+  "comments": {
+    "lineComment": "//",
+    "blockComment": [ "/*", "*/" ]
+  },
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""]
+  ],
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*(?i)Pour .* Faire :\\s*$",
+      "action": { "indent": "indentOutdent", "appendText": "fpour" }
+    },
+    {
+      "beforeText": "^\\s*(?i)Tant que .* Faire :\\s*$",
+      "action": { "indent": "indentOutdent", "appendText": "ftq" }
+    },
+    {
+      "beforeText": "^\\s*(?i)Si .* Alors :\\s*$",
+      "action": { "indent": "indentOutdent", "appendText": "fsi" }
+    },
+    {
+      "beforeText": "^\\s*(?i)Début\\s*$",
+      "action": { "indent": "indentOutdent", "appendText": "Fin" }
+    },
+    {
+      "beforeText": "^\\s*(?i)Sinon\\s*$",
+      "action": { "indent": "indent" }
+    }
+  ]
+}
