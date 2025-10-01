@@ -1,4 +1,3 @@
-
 {
   "Algorithme principal": {
     "prefix": "algorithme",
@@ -61,5 +60,19 @@
       "fsi"
     ],
     "description": "Crée une structure conditionnelle Si/Alors/Sinon."
+  },
+  "Flèche d'assignation": {
+    "prefix": ["fleche", "<--"],
+    "body": [
+      "←"
+    ],
+    "description": "Insère une flèche d'assignation (←)."
+  },
+  "Division Euclidienne": {
+    "prefix": ["divideuclidienne"],
+    "body": [
+      "÷"
+    ],
+    "description": "Insère le symbole de la division euclidienne (÷)."
   }
 }

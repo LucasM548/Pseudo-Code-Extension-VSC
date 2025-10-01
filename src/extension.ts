@@ -17,9 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(formattingProvider);
 
-    // --- NOUVELLE PARTIE : DÉCLENCHER L'ANALYSE ---
-
-    // Analyser le document dès son ouverture
+    // --- GESTION DE L'ANALYSE (DIAGNOSTICS) ---
     if (vscode.window.activeTextEditor) {
         refreshDiagnostics(vscode.window.activeTextEditor.document, diagnosticsCollection);
     }
@@ -28,18 +26,11 @@ export function activate(context: vscode.ExtensionContext) {
             refreshDiagnostics(editor.document, diagnosticsCollection);
         }
     }));
-
-    // Analyser le document à chaque modification
-    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
-        refreshDiagnostics(event.document, diagnosticsCollection);
-    }));
-
-    // Nettoyer les diagnostics quand un fichier est fermé
     context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc => {
         diagnosticsCollection.delete(doc.uri);
     }));
 
-// --- NOUVELLE PARTIE : ENREGISTRER LA COMMANDE D'EXÉCUTION ---
+    // --- GESTION DE LA COMMANDE D'EXÉCUTION ---
     const executeCommand = vscode.commands.registerCommand('psc.execute', () => {
         const editor = vscode.window.activeTextEditor;
         if (editor && editor.document.languageId === 'psc') {
@@ -48,8 +39,56 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showErrorMessage('Aucun fichier Pseudo-Code actif à exécuter.');
         }
     });
-
     context.subscriptions.push(executeCommand);
+
+    // --- NOUVELLE PARTIE : LOGIQUE DE REMPLACEMENT AUTOMATIQUE ET DIAGNOSTICS ---
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
+        // On s'assure que le document est bien du Pseudo-Code
+        if (event.document.languageId !== 'psc') {
+            return;
+        }
+
+        // On déclenche l'analyse des erreurs à chaque modification
+        refreshDiagnostics(event.document, diagnosticsCollection);
+
+        // On exécute la logique de remplacement pour la flèche
+        handleArrowReplacement(event);
+    }));
 }
+
+/**
+ * Gère le remplacement automatique de "<--" par "←".
+ */
+function handleArrowReplacement(event: vscode.TextDocumentChangeEvent): void {
+    const changes = event.contentChanges;
+    if (changes.length === 0) {
+        return;
+    }
+
+    const lastChange = changes[0];
+
+    // On ne s'active que si l'utilisateur a ajouté du texte (pas s'il en a supprimé)
+    // et que le texte ajouté est le tiret final de la séquence "<--"
+    if (lastChange.text !== '-' || lastChange.rangeLength > 0) {
+        return;
+    }
+
+    const currentPosition = lastChange.range.start;
+    const line = event.document.lineAt(currentPosition.line);
+    
+    // On vérifie si les deux caractères précédents sont bien "<" et "-"
+    if (currentPosition.character > 1 && line.text.substring(currentPosition.character - 2, currentPosition.character) === '<-') {
+        const rangeToReplace = new vscode.Range(
+            currentPosition.with({ character: currentPosition.character - 2 }),
+            currentPosition.translate(0, 1)
+        );
+
+        // On crée la modification et on l'applique
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(event.document.uri, rangeToReplace, '←');
+        vscode.workspace.applyEdit(edit);
+    }
+}
+
 
 export function deactivate() {}
