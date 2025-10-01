@@ -90,45 +90,34 @@ function transpileToLua(pscCode: string): string {
             let isForLoop = false;
             trimmedLine = trimmedLine.replace(/[“”]/g, '"');
 
-            // --- CORRECTION DU BUG DE PARENTHÈSES ICI ---
             if (/^\s*fonction\s/i.test(trimmedLine)) {
                 const signaturePart = trimmedLine.substring(trimmedLine.toLowerCase().indexOf('fonction ') + 'fonction '.length);
                 const openParenIndex = signaturePart.indexOf('(');
                 let closeParenIndex = -1;
-
                 if (openParenIndex !== -1) {
                     let balance = 1;
                     for (let i = openParenIndex + 1; i < signaturePart.length; i++) {
                         if (signaturePart[i] === '(') balance++;
                         if (signaturePart[i] === ')') balance--;
-                        if (balance === 0) {
-                            closeParenIndex = i;
-                            break;
-                        }
+                        if (balance === 0) { closeParenIndex = i; break; }
                     }
                 }
-
                 if (openParenIndex !== -1 && closeParenIndex !== -1) {
                     const funcName = signaturePart.substring(0, openParenIndex).trim();
                     const paramsString = signaturePart.substring(openParenIndex + 1, closeParenIndex);
-
                     if (paramsString.trim() === '') {
                         trimmedLine = `function ${funcName}()`;
                     } else {
-                        const cleanedParams = paramsString.split(',')
-                            .map(p => p.trim().split(':')[0].replace(/\bInOut\b/i, '').trim())
-                            .join(', ');
+                        const cleanedParams = paramsString.split(',').map(p => p.trim().split(':')[0].replace(/\bInOut\b/i, '').trim()).join(', ');
                         trimmedLine = `function ${funcName}(${cleanedParams})`;
                     }
                 } else {
                      trimmedLine = `function ${signaturePart.split(':')[0].trim().replace(/\(\)/g, '')}()`;
                 }
-            // --- FIN DE LA CORRECTION ---
             } else if (/^\s*Pour\s/i.test(trimmedLine)) {
                 isForLoop = true;
                 let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : '';
-                trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '')
-                    .replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
             } else if (/^\s*Tant que\b/i.test(trimmedLine)) {
                 trimmedLine = trimmedLine.replace(/^\s*Tant que\b/i, 'while').replace(/\s+Faire\s*:?/i, ' do');
             } else if (/^\s*Si\b/i.test(trimmedLine)) {
@@ -142,8 +131,8 @@ function transpileToLua(pscCode: string): string {
             trimmedLine = trimmedLine
                 .replace(/longueur\s*\(([^)]+)\)/gi, '#$1')
                 .replace(/concat\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, '$1 .. $2')
-                .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, ($2) + ($3) - 1)')
-                .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)');
+                .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, 2, ($2) + ($3) - 1)')
+                .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, 2, $2)');
 
             trimmedLine = trimmedLine
                 .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return')
@@ -158,10 +147,20 @@ function transpileToLua(pscCode: string): string {
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
                 .replace(/écrire\s*\((.*)\)/gi, 'print($1)')
-                .replace(/lire\s*\(\)/gi, 'io.read()')
-                .replace(/\[\s*\]/g, '{}')
-                .replace(/(\w+)\[([^,\]]+)\s*,\s*([^\]]+)\]/g, '$1[$2][$3]')
-                .replace(/(\w+)\[([^\]]+)\]/g, '$1[$2]');
+                .replace(/lire\s*\(\)/gi, 'io.read()');
+
+            // --- CORRECTION MAJEURE : Nouvelle logique de remplacement des tableaux ---
+
+            // ÉTAPE 1 : Gérer les littéraux de tableaux (ex: [1,2,3] -> {1,2,3})
+            // La regex (?<![\p{L}0-9_])\[ s'assure qu'on ne remplace pas les crochets d'accès comme dans `tab[i]`
+            trimmedLine = trimmedLine.replace(/(?<![\p{L}0-9_])\[([^\]]*)\]/gu, '{$1}');
+
+            // ÉTAPE 2 : Gérer les accès aux tableaux (ex: tab[i], tab[i,j])
+            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\[([^\]]+)\]/gu, (match, varName, indicesString) => {
+                const indices = indicesString.split(',');
+                const transformedIndices = indices.map((index: string) => `(${(index || '').trim()}) + 1`);
+                return `${varName}[${transformedIndices.join('][')}]`;
+            });
         }
 
         const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
