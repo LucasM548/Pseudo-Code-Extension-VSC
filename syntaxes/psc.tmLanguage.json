@@ -5,6 +5,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#support-functions" },
     { "include": "#function-call" },
     { "include": "#keywords" },
     { "include": "#storage" },
@@ -22,7 +23,11 @@
     },
     "keywords": {
       "name": "keyword.control.psc",
-      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant que|ftq|ftant|Début|Fin|retourner|écrire|lire)\\b"
+      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant que|ftq|ftant|Début|Fin)\\b"
+    },
+    "support-functions": {
+      "name": "support.function.psc",
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne)\\b"
     },
     "storage": {
       "patterns": [
@@ -60,10 +65,7 @@
         { "name": "constant.language.boolean.psc", "match": "(?i)\\b(vrai|faux)\\b" }
       ]
     },
-    "operators": {
-      "name": "keyword.operator.assignment.psc",
-      "match": "(\\leftarrow|←|÷)"
-    },
+    "operators": { "name": "keyword.operator.assignment.psc", "match": "(\\leftarrow|←|÷)" },
     "variables": { "name": "variable.other.psc", "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b" }
   }
 }
