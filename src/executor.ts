@@ -6,8 +6,6 @@ import { exec } from 'child_process';
 
 /**
  * Transpile le code Pseudo-Code en code Lua exécutable.
- * VERSION CORRIGÉE : Utilise une boucle de remplacement itérative améliorée
- * pour gérer correctement les appels de fonctions imbriquées, corrige l'indexation
  * des tableaux et améliore la traduction des mots-clés.
  * @param pscCode Le code source en Pseudo-Code.
  * @returns Le code Lua transpilé.
@@ -77,7 +75,6 @@ function transpileToLua(pscCode: string): string {
                  trimmedLine = `function ${signaturePart.split(':')[0].trim().replace(/\(\)/g, '')}()`;
             }
         }
-        // CORRECTION N°1 : Rendre la regex de la boucle Pour plus flexible
         else if (/^\s*Pour\s/i.test(trimmedLine)) {
             isForLoop = true;
             let step = '';
@@ -85,7 +82,6 @@ function transpileToLua(pscCode: string): string {
                 step = ', -1';
                 trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '');
             }
-            // Gère "de...à", "allant de...a", etc.
             trimmedLine = trimmedLine.replace(
                 /^\s*Pour\s+([a-zA-Z0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/i,
                 `for $1 = $2, $3${step} do`
@@ -108,14 +104,12 @@ function transpileToLua(pscCode: string): string {
         do {
             previousLine = trimmedLine;
             trimmedLine = trimmedLine
-                // CORRECTION N°2 : La longueur en Lua est #variable, SANS parenthèses. C'est le point crucial.
                 .replace(/longueur\s*\(([^)]+)\)/gi, '#$1')
                 .replace(/concat\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, '$1 .. $2')
                 .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, ($2) + ($3) - 1)')
                 .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)');
         } while (previousLine !== trimmedLine);
 
-        // CORRECTION N°3 : Gérer toutes les variantes de "retourner" et supprimer les parenthèses
         trimmedLine = trimmedLine
             .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1')
             .replace(/\bretourne(?:r)?\b/gi, 'return')
@@ -125,7 +119,6 @@ function transpileToLua(pscCode: string): string {
             .replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=')
             .replace(/÷/g, '//');
         
-        // CORRECTION N°4 : Inverser l'ordre pour éviter la double substitution.
         if (!isForLoop) {
             trimmedLine = trimmedLine.replace(/(?<![<>~=])=(?!=)/g, '==');
         }
@@ -145,7 +138,6 @@ function transpileToLua(pscCode: string): string {
     return luaCode;
 }
 
-// La fonction executeCode reste inchangée, elle utilise maintenant la nouvelle logique de transpilation.
 export function executeCode(document: vscode.TextDocument) {
     const pscCode = document.getText();
     const luaCode = transpileToLua(pscCode);
@@ -162,7 +154,6 @@ export function executeCode(document: vscode.TextDocument) {
     const terminal = vscode.window.createTerminal("Pseudo-Code Execution");
     terminal.show();
     
-    // Assurez-vous que la commande 'lua' est accessible dans le PATH de votre système
     const command = `lua "${tempFilePath}"`;
     terminal.sendText(command);
 }
