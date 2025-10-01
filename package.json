@@ -73,7 +73,16 @@
         "title": "Exécuter le fichier Pseudo-Code",
         "category": "PSC"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "psc.execute",
+          "when": "resourceLangId == psc",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
