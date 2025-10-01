@@ -2,7 +2,7 @@
   "name": "pseudocode-support",
   "displayName": "PseudoCode Language Support",
   "description": "Advanced syntax highlighting, intelligent snippets and symbol navigation for the PSC language.",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "Lucas_M54",
   "author": {
     "name": "Lucas Martinati"
