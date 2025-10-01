@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { formatDocument } from './formatter';
-import { refreshDiagnostics } from './diagnostics'; // On importe notre nouvelle logique
+import { refreshDiagnostics } from './diagnostics';
+import { executeCode } from './executor';
 
 // Une "collection de diagnostics" est le conteneur de VS Code pour toutes nos erreurs
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('psc');
@@ -37,6 +38,18 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc => {
         diagnosticsCollection.delete(doc.uri);
     }));
+
+// --- NOUVELLE PARTIE : ENREGISTRER LA COMMANDE D'EXÉCUTION ---
+    const executeCommand = vscode.commands.registerCommand('psc.execute', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor && editor.document.languageId === 'psc') {
+            executeCode(editor.document);
+        } else {
+            vscode.window.showErrorMessage('Aucun fichier Pseudo-Code actif à exécuter.');
+        }
+    });
+
+    context.subscriptions.push(executeCommand);
 }
 
 export function deactivate() {}
