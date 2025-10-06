@@ -132,7 +132,7 @@ function transpileToLua(pscCode: string): string {
                 .replace(/longueur\s*\(([^)]+)\)/gi, '#$1')
                 .replace(/concat\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, '$1 .. $2')
                 .replace(/sousChaîne\s*\(([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, 2, ($2) + ($3) - 1)')
-                .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, 2, $2)');
+                .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)');
 
             trimmedLine = trimmedLine
                 .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return')
