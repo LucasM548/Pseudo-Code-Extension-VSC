@@ -51,43 +51,64 @@ export function activate(context: vscode.ExtensionContext) {
         // On déclenche l'analyse des erreurs à chaque modification
         refreshDiagnostics(event.document, diagnosticsCollection);
 
-        // On exécute la logique de remplacement pour la flèche
-        handleArrowReplacement(event);
+    // On exécute la logique de remplacement pour symboles (flèche, ≤, ≥, ≠)
+    handleSymbolReplacement(event);
     }));
 }
 
 /**
- * Gère le remplacement automatique de "<--" par "←".
+ * Remplacements automatiques optimisés pour symboles :
+ *  '<-' -> '←'
+ *  '<=' -> '≤'
+ *  '>=' -> '≥'
+ *  '!=' or '=/' -> '≠'
+ *
+ * Optimisations et garanties :
+ * - Ne se déclenche que pour des insertions simples (pas de suppression ou de collage massif).
+ * - Ignore les remplacements quand on est dans un commentaire de ligne (//) ou dans une chaîne entre guillemets.
  */
-function handleArrowReplacement(event: vscode.TextDocumentChangeEvent): void {
+function handleSymbolReplacement(event: vscode.TextDocumentChangeEvent): void {
     const changes = event.contentChanges;
-    if (changes.length === 0) {
-        return;
-    }
+    if (changes.length === 0) return;
 
     const lastChange = changes[0];
+    if (lastChange.rangeLength > 0) return;
+    if (!lastChange.text || lastChange.text.length > 1) return;
 
-    // On ne s'active que si l'utilisateur a ajouté du texte (pas s'il en a supprimé)
-    // et que le texte ajouté est le tiret final de la séquence "<--"
-    if (lastChange.text !== '-' || lastChange.rangeLength > 0) {
-        return;
-    }
+    const insertPos = lastChange.range.start;
+    const line = event.document.lineAt(insertPos.line);
 
-    const currentPosition = lastChange.range.start;
-    const line = event.document.lineAt(currentPosition.line);
-    
-    // On vérifie si les deux caractères précédents sont bien "<" et "-"
-    if (currentPosition.character > 1 && line.text.substring(currentPosition.character - 2, currentPosition.character) === '<-') {
-        const rangeToReplace = new vscode.Range(
-            currentPosition.with({ character: currentPosition.character - 2 }),
-            currentPosition.translate(0, 1)
-        );
+    const lineCommentIndex = line.text.indexOf('//');
+    if (lineCommentIndex !== -1 && insertPos.character > lineCommentIndex) return;
 
-        // On crée la modification et on l'applique
-        const edit = new vscode.WorkspaceEdit();
-        edit.replace(event.document.uri, rangeToReplace, '←');
-        vscode.workspace.applyEdit(edit);
-    }
+    const textBefore = line.text.substring(0, insertPos.character);
+    const quoteCount = (textBefore.match(/\"/g) || []).length;
+    if (quoteCount % 2 === 1) return;
+
+    const startIndex = Math.max(0, insertPos.character - 1);
+    const endIndex = insertPos.character + lastChange.text.length;
+    const twoChars = line.text.substring(startIndex, endIndex);
+
+    const replacements: { [k: string]: string } = {
+        '<-': '←',
+        '<=': '≤',
+        '>=': '≥',
+        '!=': '≠',
+        '=/': '≠'
+    };
+
+    const replacement = replacements[twoChars];
+    if (!replacement) return;
+
+    // Calculer la plage à remplacer dans le document
+    const rangeToReplace = new vscode.Range(
+        insertPos.with({ character: startIndex }),
+        insertPos.with({ character: endIndex })
+    );
+
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(event.document.uri, rangeToReplace, replacement);
+    vscode.workspace.applyEdit(edit);
 }
 
 
