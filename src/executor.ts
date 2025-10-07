@@ -248,9 +248,25 @@ export function executeCode(document: vscode.TextDocument) {
 
     vscode.window.showInformationMessage(`Fichier Lua temporaire généré : ${tempFilePath}`);
 
-    const terminal = vscode.window.createTerminal("Pseudo-Code Execution");
-    terminal.show();
-    
+    // Réutiliser un terminal existant nommé "Pseudo-Code Execution" si présent
+    const terminalName = "Pseudo-Code Execution";
+    let terminal: vscode.Terminal | undefined = undefined;
+    for (const t of vscode.window.terminals) {
+        if (t.name === terminalName) { terminal = t; break; }
+    }
+    if (!terminal) {
+        terminal = vscode.window.createTerminal(terminalName);
+    }
+    terminal.show(true); // focus the terminal
+
     const command = `lua "${tempFilePath}"`;
-    terminal.sendText(command);
+    // Effacer seulement la zone de texte (buffer d'entrée) en envoyant Ctrl+C
+    // Cela évite d'effacer l'historique du terminal tout en supprimant toute saisie inachevée.
+    try {
+        terminal.sendText('\x03', false); // Ctrl+C
+    } catch (e) {
+        // Fallback silencieux si l'envoi de caractères de contrôle n'est pas supporté
+    }
+    // Envoyer la commande et exécuter immédiatement
+    terminal.sendText(command, true);
 }
