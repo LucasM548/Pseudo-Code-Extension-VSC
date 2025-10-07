@@ -294,8 +294,9 @@ function transpileToLua(pscCode: string): string {
             });
         }
 
-        if (trimmedLine.startsWith('écrire(')) {
-            trimmedLine = '__psc_write(' + trimmedLine.substring('écrire('.length);
+        if (trimmedLine.match(/^écrire\(/i)) {
+            const openParenIndex = trimmedLine.indexOf('(');
+            trimmedLine = '__psc_write' + trimmedLine.substring(openParenIndex);
         }
 
         const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
