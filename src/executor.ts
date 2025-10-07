@@ -284,7 +284,6 @@ function transpileToLua(pscCode: string): string {
 
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
-                .replace(/écrire\s*\((.*)\)/gi, '__psc_print($1)')
                 .replace(/lire\s*\(\)/gi, 'io.read()');
 
             trimmedLine = trimmedLine.replace(/(?<![\p{L}0-9_])\[([^\]]*)\]/gu, '{$1}');
@@ -293,6 +292,10 @@ function transpileToLua(pscCode: string): string {
                 const transformedIndices = indices.map((index: string) => `(${(index || '').trim()}) + 1`);
                 return `${varName}[${transformedIndices.join('][')}]`;
             });
+        }
+
+        if (trimmedLine.startsWith('écrire(')) {
+            trimmedLine = '__psc_write(' + trimmedLine.substring('écrire('.length);
         }
 
         const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
@@ -329,19 +332,21 @@ local function __psc_serialize(v)
             return '{' .. table.concat(parts, ', ') .. '}'
         end
     elseif type(v) == 'string' then
-        return '"' .. v .. '"'
+        return v
+    elseif type(v) == 'boolean' then
+        return v and 'Vrai' or 'Faux'
     else
         return tostring(v)
     end
 end
 
-local function __psc_print(...)
+local function __psc_write(...)
     local args = {...}
     local parts = {}
     for i = 1, #args do
-        parts[#parts+1] = __psc_serialize(args[i])
+        parts[i] = __psc_serialize(args[i])
     end
-    print(table.concat(parts, '\t'))
+    print(table.concat(parts, ''))
 end
 `;
 
