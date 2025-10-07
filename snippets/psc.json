@@ -8,7 +8,7 @@
       "Fin",
       "/**",
       "Lexique :",
-      "\t${2:variable} : ${3:type}",
+      "${2:variable} : ${3:type}",
       "*/"
     ],
     "description": "Crée une structure d'algorithme principal."
@@ -22,7 +22,7 @@
       "Fin",
       "/**",
       "Lexique :",
-      "\t${4:variable} : ${5:type}",
+      "${4:variable} : ${5:type}",
       "*/"
     ],
     "description": "Crée une structure de fonction complète avec lexique."
