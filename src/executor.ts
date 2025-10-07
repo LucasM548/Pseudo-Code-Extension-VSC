@@ -258,9 +258,5 @@ export function executeCode(document: vscode.TextDocument) {
     terminal.show(true); // focus the terminal
 
     const command = `lua "${tempFilePath}"`;
-    try {
-        terminal.sendText('\x03', false); // Ctrl+C
-    } catch (e) {
-    }
     terminal.sendText(command, true);
 }
