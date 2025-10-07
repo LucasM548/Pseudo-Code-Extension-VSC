@@ -51,8 +51,8 @@ export function activate(context: vscode.ExtensionContext) {
         // On déclenche l'analyse des erreurs à chaque modification
         refreshDiagnostics(event.document, diagnosticsCollection);
 
-    // On exécute la logique de remplacement pour symboles (flèche, ≤, ≥, ≠)
-    handleSymbolReplacement(event);
+        // On exécute la logique de remplacement pour symboles (flèche, ≤, ≥, ≠)
+        handleSymbolReplacement(event);
     }));
 }
 
@@ -112,4 +112,4 @@ function handleSymbolReplacement(event: vscode.TextDocumentChangeEvent): void {
 }
 
 
-export function deactivate() {}
+export function deactivate() { }

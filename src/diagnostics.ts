@@ -45,7 +45,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             scopeStack.push(newScope);
         }
 
-    const declarationMatch = trimmedText.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_éèêàùçîï]+?)/iu);
+        const declarationMatch = trimmedText.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_éèêàùçîï]+?)/iu);
         const assignmentIndex = trimmedText.indexOf('←');
 
         if (declarationMatch && !/^\s*Fonction/i.test(trimmedText)) {
