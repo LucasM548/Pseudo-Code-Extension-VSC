@@ -165,7 +165,7 @@ function transpileToLua(pscCode: string): string {
             
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
-                .replace(/écrire\s*\((.*)\)/gi, 'print($1)')
+                .replace(/écrire\s*\((.*)\)/gi, '__psc_print($1)')
                 .replace(/lire\s*\(\)/gi, 'io.read()');
 
             // --- CORRECTION MAJEURE : Nouvelle logique de remplacement des tableaux ---
@@ -187,7 +187,53 @@ function transpileToLua(pscCode: string): string {
         luaCode += indentation + trimmedLine + finalComment + '\n';
     }
 
-    return luaCode;
+    // Préfixe : helpers Lua pour sérialiser les tableaux et imprimer proprement
+    const helpers = `local function __psc_is_array(t)
+    if type(t) ~= 'table' then return false end
+    local i = 0
+    for _ in pairs(t) do
+        i = i + 1
+    end
+    local count = 0
+    for k in pairs(t) do
+        if type(k) == 'number' then count = count + 1 end
+    end
+    return count == i
+end
+
+local function __psc_serialize(v)
+    if type(v) == 'table' then
+        if __psc_is_array(v) then
+            local parts = {}
+            for i = 1, #v do
+                parts[#parts+1] = __psc_serialize(v[i])
+            end
+            return '[' .. table.concat(parts, ', ') .. ']'
+        else
+            local parts = {}
+            for k, val in pairs(v) do
+                parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
+            end
+            return '{' .. table.concat(parts, ', ') .. '}'
+        end
+    elseif type(v) == 'string' then
+        return '"' .. v .. '"'
+    else
+        return tostring(v)
+    end
+end
+
+local function __psc_print(...)
+    local args = {...}
+    local parts = {}
+    for i = 1, #args do
+        parts[#parts+1] = __psc_serialize(args[i])
+    end
+    print(table.concat(parts, '\t'))
+end
+`;
+
+    return helpers + luaCode;
 }
 
 export function executeCode(document: vscode.TextDocument) {
