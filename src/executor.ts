@@ -24,9 +24,20 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
                 if (v) variableTypes[v] = type;
             });
         }
-        const funcMatch = trimmedLine.match(/^\s*Fonction\s+[\p{L}0-9_]+\s*\(([^)]*)\)/iu);
+        const funcMatch = trimmedLine.match(/^\s*Fonction\s+[\p{L}0-9_]+\s*\((.*)\)/iu);
         if (funcMatch) {
-            const params = funcMatch[1].split(',');
+            let paramsString = funcMatch[1];
+            const lastParen = paramsString.lastIndexOf(')');
+            const returnColon = paramsString.lastIndexOf(':');
+
+            if (returnColon > lastParen) {
+                paramsString = paramsString.substring(0, returnColon).trim();
+                if (paramsString.endsWith(')')) {
+                    paramsString = paramsString.slice(0, -1);
+                }
+            }
+
+            const params = paramsString.split(/,(?![^(\[]*[)\]])/g);
             params.forEach(p => {
                 const parts = p.split(':').map(part => part.trim());
                 if (parts.length === 2) {

@@ -22,13 +22,21 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
         if (trimmedText === '') continue;
 
         const isOpeningBlock = /^\s*(Si|Tant que|Début)(?![\p{L}0-9_])/iu.test(trimmedText);
-        const funcMatch = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)\s*\(([^)]*)\)/iu.exec(trimmedText);
+        const funcMatch = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)\s*\((.*)\)/iu.exec(trimmedText);
         const pourMatch = /^\s*Pour\s+([\p{L}_][\p{L}0-9_]*)/iu.exec(trimmedText);
 
         if (isOpeningBlock || funcMatch || pourMatch) {
             const newScope = new Set<string>();
             if (funcMatch) {
-                const params = funcMatch[2].split(',').map(p => p.trim().split(':')[0].replace(/\bInOut\b/i, '').trim());
+                let paramsString = funcMatch[2];
+                const lastParen = paramsString.lastIndexOf(')');
+                const returnColon = paramsString.lastIndexOf(':');
+
+                if (returnColon > lastParen) {
+                    paramsString = paramsString.substring(0, returnColon).trim();
+                }
+
+                const params = paramsString.split(/,(?![^(\[]*[)\]])/g).map(p => p.trim().split(':')[0].replace(/\bInOut\b/i, '').trim());
                 params.forEach(p => { if (p) newScope.add(p); });
             }
             if (pourMatch) {
