@@ -42,7 +42,7 @@ function collectFunctionInfo(pscCode: string): void {
                 paramsString = paramsString.substring(0, returnColon).trim();
             }
             if (paramsString.endsWith(')')) {
-                 paramsString = paramsString.slice(0, -1);
+                paramsString = paramsString.slice(0, -1);
             }
 
             const params: ParamInfo[] = [];
@@ -217,33 +217,33 @@ function transpileToLua(pscCode: string): string {
                     trimmedLine = `function ${funcInfo.name}(${paramNames})`;
                 }
             } else {
-                 const callRegex = /([\p{L}_][\p{L}0-9_]+)\s*\(([^)]*)\)/gu;
-                 let match;
-                 if (!/^\s*si|tant que|pour|écrire/i.test(trimmedLine)) {
-                     while ((match = callRegex.exec(trimmedLine)) !== null) {
-                         const funcName = match[1];
-                         const funcInfo = functionRegistry.get(funcName);
-                         if (funcInfo && funcInfo.inOutParamNames.length > 0) {
-                             const args = match[2].split(',').map(a => a.trim());
-                             const varsToReassign = funcInfo.getInOutArgsToReassign(args);
- 
-                             if (varsToReassign.length > 0) {
-                                 const callExpression = match[0];
-                                 if (trimmedLine.includes('←')) {
-                                     const parts = trimmedLine.split('←');
-                                     const lhs = parts[0].trim();
-                                     trimmedLine = `${lhs}, ${varsToReassign.join(', ')} = ${parts[1].trim()}`;
-                                 } else {
-                                     trimmedLine = `${varsToReassign.join(', ')} = ${callExpression}`;
-                                 }
-                                 lineIsFullyProcessed = true;
-                                 break;
-                             }
-                         }
-                     }
-                 }
-             }
-            
+                const callRegex = /([\p{L}_][\p{L}0-9_]+)\s*\(([^)]*)\)/gu;
+                let match;
+                if (!/^\s*si|tant que|pour|écrire/i.test(trimmedLine)) {
+                    while ((match = callRegex.exec(trimmedLine)) !== null) {
+                        const funcName = match[1];
+                        const funcInfo = functionRegistry.get(funcName);
+                        if (funcInfo && funcInfo.inOutParamNames.length > 0) {
+                            const args = match[2].split(',').map(a => a.trim());
+                            const varsToReassign = funcInfo.getInOutArgsToReassign(args);
+
+                            if (varsToReassign.length > 0) {
+                                const callExpression = match[0];
+                                if (trimmedLine.includes('←')) {
+                                    const parts = trimmedLine.split('←');
+                                    const lhs = parts[0].trim();
+                                    trimmedLine = `${lhs}, ${varsToReassign.join(', ')} = ${parts[1].trim()}`;
+                                } else {
+                                    trimmedLine = `${varsToReassign.join(', ')} = ${callExpression}`;
+                                }
+                                lineIsFullyProcessed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!lineIsFullyProcessed) {
                 if (/^\s*Pour\s/i.test(trimmedLine)) {
                     isForLoop = true;
@@ -266,7 +266,7 @@ function transpileToLua(pscCode: string): string {
                     .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, `return $1, ${currentFunc.inOutParamNames.join(', ')}`)
                     .replace(/\bretourne(?:r)?\b/gi, `return ${currentFunc.inOutParamNames.join(', ')}`);
             } else {
-                 trimmedLine = trimmedLine.replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return');
+                trimmedLine = trimmedLine.replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return');
             }
 
             trimmedLine = trimmedLine
