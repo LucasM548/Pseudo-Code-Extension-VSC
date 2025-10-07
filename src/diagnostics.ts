@@ -36,7 +36,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             }
             scopeStack.push(newScope);
         }
-        
+
     const declarationMatch = trimmedText.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_éèêàùçîï]+?)/iu);
         const assignmentIndex = trimmedText.indexOf('←');
 
@@ -58,7 +58,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
         } else {
             checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, line, diagnostics);
         }
-        
+
         const isClosingBlock = /^\s*(fpour|fsi|ftq|Fin)(?![\p{L}0-9_])/iu.test(trimmedText);
         if (isClosingBlock && scopeStack.length > 1) {
             scopeStack.pop();
@@ -67,8 +67,6 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
 
     collection.set(doc.uri, diagnostics);
 }
-
-// --- LA SEULE MODIFICATION EST DANS CETTE FONCTION ---
 
 /**
  * Vérifie tous les identifiants dans une expression donnée (partie de ligne).
@@ -84,7 +82,7 @@ function checkVariablesInExpression(
     // On ne vérifie que le texte qui n'est pas dans des commentaires ou des chaînes
     const textToCheck = expression.replace(/"[^"]*"/g, match => ' '.repeat(match.length));
     const regex = /(?<![\p{L}0-9_])[\p{L}_][\p{L}0-9_]*(?![\p{L}0-9_])/gu;
-    
+
     // Calculer le décalage entre le texte original de la ligne et l'expression analysée
     const expressionOffsetInLine = line.text.indexOf(expression);
     if (expressionOffsetInLine === -1) return; // Sécurité si l'expression n'est pas trouvée
@@ -114,9 +112,6 @@ function checkVariablesInExpression(
         }
     }
 }
-
-
-// ... Les autres fonctions (cleanLineFromComments, collectFunctionNames, isKnownIdentifier) restent INCHANGÉES ...
 
 function cleanLineFromComments(lineText: string, initialInBlockComment: boolean): { text: string; inBlockComment: boolean; } {
     let nonCommentText = '';

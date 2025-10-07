@@ -131,7 +131,7 @@ function transpileToLua(pscCode: string): string {
                         trimmedLine = `function ${funcName}(${cleanedParams})`;
                     }
                 } else {
-                     trimmedLine = `function ${signaturePart.split(':')[0].trim().replace(/\(\)/g, '')}()`;
+                    trimmedLine = `function ${signaturePart.split(':')[0].trim().replace(/\(\)/g, '')}()`;
                 }
             } else if (/^\s*Pour\s/i.test(trimmedLine)) {
                 isForLoop = true;
@@ -158,17 +158,15 @@ function transpileToLua(pscCode: string): string {
                 .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
                 .replace(/\bnon\b/gi, 'not').replace(/\bou\b/gi, 'or').replace(/\bet\b/gi, 'and')
                 .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//');
-            
+
             if (!isForLoop) {
                 trimmedLine = trimmedLine.replace(/(?<![<>~=])=(?!=)/g, '==');
             }
-            
+
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
                 .replace(/écrire\s*\((.*)\)/gi, '__psc_print($1)')
                 .replace(/lire\s*\(\)/gi, 'io.read()');
-
-            // --- CORRECTION MAJEURE : Nouvelle logique de remplacement des tableaux ---
 
             // ÉTAPE 1 : Gérer les littéraux de tableaux (ex: [1,2,3] -> {1,2,3})
             // La regex (?<![\p{L}0-9_])\[ s'assure qu'on ne remplace pas les crochets d'accès comme dans `tab[i]`
@@ -239,7 +237,7 @@ end
 export function executeCode(document: vscode.TextDocument) {
     const pscCode = document.getText();
     const luaCode = transpileToLua(pscCode);
-    
+
     console.log("--- Code Lua généré ---\n", luaCode, "\n--------------------------");
 
     const tempDir = os.tmpdir();
@@ -260,13 +258,9 @@ export function executeCode(document: vscode.TextDocument) {
     terminal.show(true); // focus the terminal
 
     const command = `lua "${tempFilePath}"`;
-    // Effacer seulement la zone de texte (buffer d'entrée) en envoyant Ctrl+C
-    // Cela évite d'effacer l'historique du terminal tout en supprimant toute saisie inachevée.
     try {
         terminal.sendText('\x03', false); // Ctrl+C
     } catch (e) {
-        // Fallback silencieux si l'envoi de caractères de contrôle n'est pas supporté
     }
-    // Envoyer la commande et exécuter immédiatement
     terminal.sendText(command, true);
 }
