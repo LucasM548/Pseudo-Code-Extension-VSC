@@ -6,8 +6,10 @@
       "Début",
       "\t$0",
       "Fin",
+      "/**",
       "Lexique :",
-      "\t${2:variable} : ${3:type}"
+      "\t${2:variable} : ${3:type}",
+      "*/"
     ],
     "description": "Crée une structure d'algorithme principal."
   },
@@ -18,8 +20,10 @@
       "Début",
       "\t$0",
       "Fin",
+      "/**",
       "Lexique :",
-      "\t${4:variable} : ${5:type}"
+      "\t${4:variable} : ${5:type}",
+      "*/"
     ],
     "description": "Crée une structure de fonction complète avec lexique."
   },
