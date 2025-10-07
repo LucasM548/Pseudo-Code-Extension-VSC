@@ -31,7 +31,7 @@
     },
     "storage": {
       "patterns": [
-        { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|tableau|Booleen|InOut)\\b" },
+  { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b" },
         { "name": "storage.modifier.psc", "match": "(?i)\\b(Lexique|Fonction|Algorithme)\\b" }
       ]
     },

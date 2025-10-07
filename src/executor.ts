@@ -15,9 +15,10 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
 
     for (const line of lines) {
         const trimmedLine = line.trim();
-        const declarationMatch = trimmedLine.match(/^([\p{L}0-9_,\s]+?)\s*:\s*(entier|réel|booléen|booleen|chaîne|tableau)/iu);
+        const declarationMatch = trimmedLine.match(/^([\p{L}0-9_,\s]+?)\s*:\s*(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)/iu);
         if (declarationMatch && !/^\s*Fonction/i.test(trimmedLine)) {
-            const type = declarationMatch[2].toLowerCase().replace('booleen', 'booléen');
+            const rawType = declarationMatch[2].toLowerCase();
+            const type = normalizeType(rawType);
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
             varNames.forEach(v => {
                 if (v) variableTypes[v] = type;
@@ -30,13 +31,28 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
                 const parts = p.split(':').map(part => part.trim());
                 if (parts.length === 2) {
                     const varName = parts[0].replace(/\bInOut\b/i, '').trim();
-                    const typeName = parts[1].toLowerCase().replace(/\b(tableau|entier|réel|booléen|booleen|chaîne).*/, '$1').replace('booleen', 'booléen');
+                    const rawTypeName = parts[1].toLowerCase().replace(/\b(tableau|entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere).*/, '$1');
+                    const typeName = normalizeType(rawTypeName);
                     if (varName) variableTypes[varName] = typeName;
                 }
             });
         }
     }
     return variableTypes;
+}
+
+/**
+ * Normalise un nom de type (variantes sans accent, différentes orthographes) en forme canonique.
+ */
+function normalizeType(raw: string): string {
+    const t = (raw || '').toLowerCase();
+    if (/^booléen$/.test(t)) return 'booléen';
+    if (/^re[ée]l$/.test(t)) return 'réel';
+    if (/^entier$/.test(t)) return 'entier';
+    if (/^cha(iî)ne$/.test(t)) return 'chaîne';
+    if (/^caract[eè]re$/.test(t)) return 'caractère';
+    if (/^tableau$/.test(t)) return 'tableau';
+    return t;
 }
 
 /**
@@ -77,9 +93,12 @@ function transpileToLua(pscCode: string): string {
         }
         if (!lineIsFullyProcessed && /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu.test(trimmedLine)) {
             const varName = trimmedLine.split('←')[0].trim();
-            const varType = variableTypes[varName];
+            const varType = normalizeType((variableTypes[varName] || '').toLowerCase());
             if (varType === 'entier' || varType === 'réel') {
                 trimmedLine = `${varName} = tonumber(io.read())`;
+            } else if (varType === 'caractère' || varType === 'caractere') {
+                // lire un seul caractère
+                trimmedLine = `${varName} = string.sub(io.read(), 1, 1)`;
             } else {
                 trimmedLine = `${varName} = io.read()`;
             }

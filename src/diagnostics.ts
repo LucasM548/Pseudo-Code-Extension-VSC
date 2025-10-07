@@ -37,7 +37,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             scopeStack.push(newScope);
         }
         
-        const declarationMatch = trimmedText.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_]+)/iu);
+    const declarationMatch = trimmedText.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_éèêàùçîï]+?)/iu);
         const assignmentIndex = trimmedText.indexOf('←');
 
         if (declarationMatch && !/^\s*Fonction/i.test(trimmedText)) {
@@ -168,7 +168,7 @@ const KNOWN_IDENTIFIERS = new Set([
     'si', 'alors', 'sinon', 'fsi', 'pour', 'de', 'à', 'faire', 'fpour', 'tant', 'que', 'ftq',
     'début', 'fin', 'algorithme', 'fonction', 'lexique', 'inout', 'décroissant', 'vrai', 'faux',
     'et', 'ou', 'non', 'mod', 'écrire', 'lire', 'retourner', 'retourne', 'longueur', 'concat',
-    'souschaîne', 'ième', 'entier', 'réel', 'booléen', 'booleen', 'chaîne', 'tableau'
+    'souschaîne', 'ième', 'entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau'
 ]);
 
 function isKnownIdentifier(word: string): boolean {
