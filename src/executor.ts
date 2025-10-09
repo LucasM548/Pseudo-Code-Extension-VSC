@@ -247,7 +247,7 @@ function transpileToLua(pscCode: string): string {
             if (!lineIsFullyProcessed) {
                 if (/^\s*Pour\s/i.test(trimmedLine)) {
                     isForLoop = true;
-                    let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : '';
+                    let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
                     trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
                 } else if (/^\s*Tant que\b/i.test(trimmedLine)) {
                     trimmedLine = trimmedLine.replace(/^\s*Tant que\b/i, 'while').replace(/\s+Faire\s*:?/i, ' do');
