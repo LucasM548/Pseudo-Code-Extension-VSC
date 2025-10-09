@@ -1,8 +1,11 @@
 # Pseudo-Code Language Support
 
+[![Version](https://img.shields.io/visual-studio-marketplace/v/LucasM54.PseudoCode-Interpreter?style=for-the-badge&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=LucasM54.PseudoCode-Interpreter)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/LucasM54.PseudoCode-Interpreter?style=for-the-badge)](https://marketplace.visualstudio.com/items?itemName=LucasM54.PseudoCode-Interpreter)
+
 Cette extension transforme Visual Studio Code en un environnement de développement intégré (IDE) puissant et complet, spécialement conçu pour l'écriture et **l'exécution** de pseudo-code algorithmique en français. C'est l'outil idéal pour les étudiants, les enseignants et les développeurs qui souhaitent prototyper, apprendre, enseigner et **tester** leurs algorithmes avec une syntaxe claire et un outillage moderne.
 
- <!-- Vous pouvez créer une capture d'écran et remplacer ce lien -->
+[**Retrouvez l'extension sur la Marketplace Visual Studio Code !**](https://marketplace.visualstudio.com/items?itemName=LucasM54.PseudoCode-Interpreter)
 
 ---
 
@@ -77,17 +80,15 @@ Lorsque vous tapez une ligne qui ouvre un bloc (comme `Pour ... Faire :`) et que
 
 ## Installation
 
+L'extension est disponible directement depuis la **Marketplace de Visual Studio Code**.
+
 1.  Ouvrez **Visual Studio Code**.
 2.  Allez dans le panneau des **Extensions** (`Ctrl+Shift+X`).
-3.  Recherchez `Pseudo-Code Language Support` (ou le nom que vous lui avez donné).
+3.  Recherchez `PseudoCode-Interpreter`.
 4.  Cliquez sur **Installer**.
-5.  Ouvrez un fichier `.psc`, écrivez votre algorithme et cliquez sur le bouton ▶️ pour le tester !
+5.  C'est tout ! Ouvrez un fichier `.psc` et commencez à coder.
 
-#### Installation Manuelle (depuis un fichier `.vsix`)
-1.  Téléchargez le fichier `pseudocode-support-x.x.x.vsix`.
-2.  Dans VS Code, allez dans le panneau des **Extensions**.
-3.  Cliquez sur les trois points (`...`) en haut à droite, puis sélectionnez **"Install from VSIX..."**.
-4.  Choisissez le fichier `.vsix` que vous avez téléchargé.
+Vous pouvez également l'installer directement depuis la [page web de la Marketplace](https://marketplace.visualstudio.com/items?itemName=LucasM54.PseudoCode-Interpreter).
 
 ---
 
