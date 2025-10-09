@@ -2,7 +2,7 @@
   "name": "PseudoCode-Interpreter",
   "displayName": "PseudoCode Language Interpreter",
   "description": "Advanced syntax highlighting, intelligent snippets and symbol navigation for the PSC language.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "LucasM54",
   "author": {
     "name": "Lucas Martinati"
