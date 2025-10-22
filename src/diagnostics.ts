@@ -11,6 +11,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
     const diagnostics: vscode.Diagnostic[] = [];
     const scopeStack: Set<string>[] = [new Set()];
     const declaredFunctions = collectFunctionNames(doc);
+    const declaredCompositeTypes = collectCompositeTypeNames(doc);
     let inBlockComment = false;
 
     for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
@@ -20,6 +21,10 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
         inBlockComment = nonCommentText.inBlockComment;
 
         if (trimmedText === '') continue;
+
+        // Ignorer complètement les déclarations de types composites
+        // Utiliser un test simple: si la ligne contient "= <" et se termine par ">", c'est une définition de type
+        if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*<.*>\s*$/iu.test(trimmedText)) continue;
 
         const isOpeningBlock = /^\s*(Si|Tant que|Début)(?![\p{L}0-9_])/iu.test(trimmedText);
         const funcMatch = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)\s*\((.*)\)/iu.exec(trimmedText);
@@ -36,8 +41,16 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
                     paramsString = paramsString.substring(0, returnColon).trim();
                 }
 
-                const params = paramsString.split(/,(?![^(\[]*[)\]])/g).map(p => p.trim().split(':')[0].replace(/\bInOut\b/i, '').trim());
-                params.forEach(p => { if (p) newScope.add(p); });
+                // Extraire seulement les NOMS de paramètres, pas les types
+                const params = paramsString.split(/,(?![^(\[]*[)\]])/g);
+                params.forEach(p => {
+                    // Format: nom : type ou InOut nom : type
+                    const paramParts = p.trim().split(':');
+                    if (paramParts.length >= 1) {
+                        const varName = paramParts[0].replace(/\bInOut\b/i, '').trim();
+                        if (varName) newScope.add(varName);
+                    }
+                });
             }
             if (pourMatch) {
                 newScope.add(pourMatch[1]);
@@ -55,16 +68,16 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
         } else if (assignmentIndex !== -1) {
             const lhsText = trimmedText.substring(0, assignmentIndex).trim();
             const rhsText = trimmedText.substring(assignmentIndex + 1).trim();
-            checkVariablesInExpression(rhsText, scopeStack, declaredFunctions, line, diagnostics);
+            checkVariablesInExpression(rhsText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
             const lhsVarMatch = lhsText.match(/^([\p{L}_][\p{L}0-9_]*)/u);
             if (lhsVarMatch) {
                 const lhsVar = lhsVarMatch[1];
                 scopeStack[scopeStack.length - 1].add(lhsVar);
             }
             const lhsIndexVars = lhsText.substring(lhsVarMatch ? lhsVarMatch[0].length : 0);
-            checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, line, diagnostics);
+            checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         } else {
-            checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, line, diagnostics);
+            checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         }
 
         const isClosingBlock = /^\s*(fpour|fsi|ftq|Fin)(?![\p{L}0-9_])/iu.test(trimmedText);
@@ -84,11 +97,39 @@ function checkVariablesInExpression(
     expression: string,
     scopeStack: Set<string>[],
     declaredFunctions: Set<string>,
+    declaredCompositeTypes: Set<string>,
     line: vscode.TextLine,
     diagnostics: vscode.Diagnostic[]
 ): void {
     // On ne vérifie que le texte qui n'est pas dans des commentaires ou des chaînes
-    const textToCheck = expression.replace(/"[^"]*"/g, match => ' '.repeat(match.length));
+    let textToCheck = expression
+        // Masquer les chaînes en double quotes
+        .replace(/"[^"]*"/g, match => ' '.repeat(match.length))
+        // Masquer les littéraux caractères en quotes simples: 'a', '\n', etc.
+        .replace(/'(?:\\.|[^\\'])'/g, match => ' '.repeat(match.length));
+    
+    // Remplacer tous les accès aux champs (variable.champ, tab[i].champ.sous_champ, etc.)
+    // On ne garde que la partie avant le premier point pour vérifier seulement la variable de base
+    // Cela évite de vérifier les noms de champs qui ne sont pas des variables déclarées
+    // Exemple: "date.jour.mois" devient "date      mois" puis on ne vérifie que "date"
+    // Exemple: "tab[i].nom" devient "tab[i]    " puis on vérifie "tab" et "i"
+    let changed = true;
+    while (changed) {
+        const before = textToCheck;
+        // Remplacer variable.champ par variable (en répétant pour gérer les chaînes)
+        textToCheck = textToCheck.replace(/([\p{L}_][\p{L}0-9_]*)\.([\p{L}_][\p{L}0-9_]*)/gu, (match, base, field) => {
+            return base + ' '.repeat(field.length + 1);
+        });
+        // Remplacer aussi après les crochets: ]\.champ
+        textToCheck = textToCheck.replace(/(\])\.([\p{L}_][\p{L}0-9_]*)/gu, (match, bracket, field) => {
+            return bracket + ' '.repeat(field.length + 1);
+        });
+        // Supprimer toute séquence restante du type .champ (ex: après un remplacement partiel dans "a.b.c")
+        // Cela évite que "c" soit considéré comme un identifiant isolé après un premier remplacement "a.b" -> "a    .c"
+        textToCheck = textToCheck.replace(/\.[\p{L}_][\p{L}0-9_]*/gu, (match) => ' '.repeat(match.length));
+        changed = (before !== textToCheck);
+    }
+    
     const regex = /(?<![\p{L}0-9_])[\p{L}_][\p{L}0-9_]*(?![\p{L}0-9_])/gu;
 
     // Calculer le décalage entre le texte original de la ligne et l'expression analysée
@@ -100,7 +141,8 @@ function checkVariablesInExpression(
         const variable = match[0];
         const indexInExpression = match.index;
 
-        if (isKnownIdentifier(variable) || declaredFunctions.has(variable) || /^\d+(\.\d+)?$/.test(variable)) {
+        // Comparaison insensible à la casse pour les types composites
+        if (isKnownIdentifier(variable) || declaredFunctions.has(variable) || declaredCompositeTypes.has(variable.toLowerCase()) || /^\d+(\.\d+)?$/.test(variable)) {
             continue;
         }
 
@@ -167,11 +209,26 @@ function collectFunctionNames(doc: vscode.TextDocument): Set<string> {
     return functions;
 }
 
+function collectCompositeTypeNames(doc: vscode.TextDocument): Set<string> {
+    const types = new Set<string>();
+    for (let i = 0; i < doc.lineCount; i++) {
+        const line = doc.lineAt(i).text.trim();
+        const typeMatch = /^([\p{L}_][\p{L}0-9_]*)\s*=\s*<.*>\s*$/iu.exec(line);
+        if (typeMatch) {
+            // Ajouter le type en minuscules pour comparaison insensible à la casse
+            types.add(typeMatch[1].toLowerCase());
+        }
+    }
+    return types;
+}
+
 const KNOWN_IDENTIFIERS = new Set([
     'si', 'alors', 'sinon', 'fsi', 'pour', 'de', 'à', 'faire', 'fpour', 'tant', 'que', 'ftq',
     'début', 'fin', 'algorithme', 'fonction', 'lexique', 'inout', 'décroissant', 'vrai', 'faux',
     'et', 'ou', 'non', 'mod', 'écrire', 'lire', 'retourner', 'retourne', 'longueur', 'concat',
-    'souschaîne', 'ième', 'entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau'
+    'souschaîne', 'ième', 'entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau',
+    // Fonctions I/O fichiers et conversion
+    'fichierouvrir', 'fichierfermer', 'fichierlire', 'fichierfin', 'chaineversentier'
 ]);
 
 function isKnownIdentifier(word: string): boolean {

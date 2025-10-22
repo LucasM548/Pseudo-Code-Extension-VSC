@@ -18,7 +18,18 @@ interface FunctionInfo {
     getInOutArgsToReassign: (callArgs: string[]) => string[];
 }
 
+interface CompositeField {
+    name: string;
+    type: string;
+}
+
+interface CompositeType {
+    name: string;
+    fields: CompositeField[];
+}
+
 const functionRegistry = new Map<string, FunctionInfo>();
+const compositeTypeRegistry = new Map<string, CompositeType>();
 
 /**
  * Analyse l'ensemble du code pour cataloguer toutes les fonctions, leurs paramètres,
@@ -84,6 +95,42 @@ function collectFunctionInfo(pscCode: string): void {
     }
 }
 
+/**
+ * Collecte tous les types composites déclarés dans le code.
+ * Exemple: Date = < jour : entier, mois : entier, annee : entier >
+ * @param pscCode Le code source en Pseudo-Code.
+ */
+function collectCompositeTypes(pscCode: string): void {
+    compositeTypeRegistry.clear();
+    const lines = pscCode.split('\n');
+    
+    for (const line of lines) {
+        const trimmedLine = line.trim();
+        // Détecter: TypeName = < field1 : type1, field2 : type2, ... >
+        const compositeMatch = trimmedLine.match(/^([\p{L}_][\p{L}0-9_]*)\s*=\s*<\s*(.+?)\s*>$/iu);
+        
+        if (compositeMatch) {
+            const typeName = compositeMatch[1];
+            const fieldsStr = compositeMatch[2];
+            const fields: CompositeField[] = [];
+            
+            // Parser les champs (peut contenir tableau Type[...] ou types simples)
+            const fieldParts = fieldsStr.split(',');
+            
+            for (const fieldPart of fieldParts) {
+                const fieldMatch = fieldPart.trim().match(/^([\p{L}_][\p{L}0-9_]*)\s*:\s*(.+)$/iu);
+                if (fieldMatch) {
+                    const fieldName = fieldMatch[1];
+                    const fieldType = fieldMatch[2].trim();
+                    fields.push({ name: fieldName, type: fieldType });
+                }
+            }
+            
+            // Enregistrer avec la clé en minuscules pour recherche insensible à la casse
+            compositeTypeRegistry.set(typeName.toLowerCase(), { name: typeName, fields });
+        }
+    }
+}
 
 /**
  * Analyse le code pseudo-code pour extraire les types de toutes les variables déclarées.
@@ -96,10 +143,14 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
 
     for (const line of lines) {
         const trimmedLine = line.trim();
-        const declarationMatch = trimmedLine.match(/^([\p{L}0-9_,\s]+?)\s*:\s*(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)/iu);
+        // Matcher les déclarations avec types primitifs ET types composites personnalisés
+        const declarationMatch = trimmedLine.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_]+)/iu);
         if (declarationMatch && !/^\s*Fonction/i.test(trimmedLine)) {
-            const rawType = declarationMatch[2].toLowerCase();
-            const type = normalizeType(rawType);
+            const rawType = declarationMatch[2];
+            // Normaliser seulement les types primitifs, garder les types composites tels quels
+            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(rawType) 
+                ? normalizeType(rawType.toLowerCase()) 
+                : rawType;
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
             varNames.forEach(v => {
                 if (v) variableTypes[v] = type;
@@ -123,9 +174,17 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
                 const parts = p.split(':').map(part => part.trim());
                 if (parts.length === 2) {
                     const varName = parts[0].replace(/\bInOut\b/i, '').trim();
-                    const rawTypeName = parts[1].toLowerCase().replace(/\b(tableau|entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere).*/, '$1');
-                    const typeName = normalizeType(rawTypeName);
-                    if (varName) variableTypes[varName] = typeName;
+                    const rawTypeName = parts[1];
+                    // Extraire juste le nom du type (sans tableau[...] etc.)
+                    const typeMatch = rawTypeName.match(/^([\p{L}0-9_]+)/iu);
+                    if (typeMatch) {
+                        const typeName = typeMatch[1];
+                        // Normaliser seulement les types primitifs
+                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(typeName)
+                            ? normalizeType(typeName.toLowerCase())
+                            : typeName;
+                        if (varName) variableTypes[varName] = finalType;
+                    }
                 }
             });
         }
@@ -148,12 +207,154 @@ function normalizeType(raw: string): string {
 }
 
 /**
+ * Découpe une chaîne d'arguments en tenant compte des parenthèses, crochets et accolades.
+ */
+function smartSplitArgs(argsStr: string): string[] {
+    const args: string[] = [];
+    let current = '';
+    let depth = 0;
+    let inString = false;
+    let stringChar = '';
+    
+    for (let i = 0; i < argsStr.length; i++) {
+        const char = argsStr[i];
+        
+        if (!inString && (char === '"' || char === "'")) {
+            inString = true;
+            stringChar = char;
+            current += char;
+        } else if (inString && char === stringChar && argsStr[i-1] !== '\\') {
+            inString = false;
+            current += char;
+        } else if (!inString && (char === '(' || char === '[' || char === '{')) {
+            depth++;
+            current += char;
+        } else if (!inString && (char === ')' || char === ']' || char === '}')) {
+            depth--;
+            current += char;
+        } else if (!inString && char === ',' && depth === 0) {
+            args.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    if (current.trim()) {
+        args.push(current.trim());
+    }
+    
+    return args;
+}
+
+/**
+ * Trouve la parenthèse fermante correspondante.
+ */
+function findMatchingParen(str: string, startPos: number): number {
+    let depth = 1;
+    for (let i = startPos + 1; i < str.length; i++) {
+        if (str[i] === '(') depth++;
+        else if (str[i] === ')') {
+            depth--;
+            if (depth === 0) return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Transforme les constructeurs de types composites et les littéraux en tables Lua.
+ * TypeName(val1, val2, ...) -> {field1 = val1, field2 = val2, ...}
+ * <val1, val2, ...> -> {val1, val2, ...}
+ */
+function transformCompositeConstructors(expression: string): string {
+    let result = expression;
+    let changed = true;
+    
+    // Répéter jusqu'à ce qu'il n'y ait plus de changements (pour gérer les constructeurs imbriqués)
+    while (changed) {
+        changed = false;
+        
+        // Transformer les constructeurs: TypeName(args...) en tables Lua avec noms de champs
+        compositeTypeRegistry.forEach((compositeType, typeNameKey) => {
+            // Le nom original du type (avec casse correcte) est dans compositeType.name
+            const typeName = compositeType.name;
+            const constructorRegex = new RegExp(`\\b${typeName}\\s*\\(`, 'gi');
+            let match;
+            let tempResult = result;
+            
+            while ((match = constructorRegex.exec(result)) !== null) {
+                const startPos = match.index;
+                const openParenPos = match.index + match[0].length - 1;
+                const closeParenPos = findMatchingParen(result, openParenPos);
+                
+                if (closeParenPos !== -1) {
+                    const argsStr = result.substring(openParenPos + 1, closeParenPos);
+                    const args = smartSplitArgs(argsStr).filter((a: string) => a);
+                    
+                    const fieldAssignments = compositeType.fields.map((field, index) => {
+                        const value = args[index] || 'nil';
+                        return `${field.name} = ${value}`;
+                    });
+                    
+                    const replacement = `{${fieldAssignments.join(', ')}}`;
+                    const before = result.substring(0, startPos);
+                    const after = result.substring(closeParenPos + 1);
+                    tempResult = before + replacement + after;
+                    
+                    if (tempResult !== result) {
+                        result = tempResult;
+                        changed = true;
+                        break; // Recommencer la recherche depuis le début
+                    }
+                }
+            }
+        });
+    }
+    
+    // Transformer les littéraux: <val1, val2, ...> en tables Lua avec champs nommés si possible
+    // Attention aux chevrons dans les comparaisons
+    result = result.replace(/<([^>]+)>/g, (match, content) => {
+        // Vérifier si c'est un littéral de structure (contient des virgules ou des valeurs)
+        const trimmedContent = content.trim();
+        if (trimmedContent.includes(',') || trimmedContent.match(/^["'\d\[\{]/) || trimmedContent.match(/^\w+\(/)) {
+            // Essayer de trouver un type composite correspondant
+            const args = smartSplitArgs(content).filter((a: string) => a);
+            
+            // Chercher un type composite avec le même nombre de champs
+            let matchingType: CompositeType | undefined;
+            compositeTypeRegistry.forEach((compositeType) => {
+                if (compositeType.fields.length === args.length) {
+                    matchingType = compositeType;
+                }
+            });
+            
+            // Si on trouve un type correspondant, créer une table avec champs nommés
+            if (matchingType) {
+                const fieldAssignments = matchingType.fields.map((field, index) => {
+                    const value = args[index] || 'nil';
+                    return `${field.name} = ${value}`;
+                });
+                return `{${fieldAssignments.join(', ')}}`;
+            }
+            
+            // Sinon, créer une table avec indices numériques
+            return `{${content}}`;
+        }
+        return match; // Laisser tel quel si ce n'est pas un littéral
+    });
+    
+    return result;
+}
+
+/**
  * Transpile le code Pseudo-Code en code Lua exécutable.
  * @param pscCode Le code source en Pseudo-Code.
  * @returns Le code Lua transpilé.
  */
 function transpileToLua(pscCode: string): string {
     collectFunctionInfo(pscCode);
+    collectCompositeTypes(pscCode);
     const variableTypes = collectVariableTypes(pscCode);
 
     let cleanedCode = pscCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/Lexique\s*:?[\s\S]*/i, '');
@@ -180,6 +381,9 @@ function transpileToLua(pscCode: string): string {
             continue;
         }
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
+        
+        // Ignorer les déclarations de types composites
+        if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*<.*>$/iu.test(trimmedLine)) continue;
 
         if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
             const isFunctionEnd = functionStack.length > 0 && /^\s*Fin\b/i.test(trimmedLine);
@@ -259,6 +463,9 @@ function transpileToLua(pscCode: string): string {
                     trimmedLine = trimmedLine.replace(/^\s*Sinon\b\s*:?/i, 'else');
                 }
             }
+
+            // Transformer les constructeurs et littéraux de types composites
+            trimmedLine = transformCompositeConstructors(trimmedLine);
 
             const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : undefined;
             if (currentFunc && currentFunc.inOutParamNames.length > 0) {

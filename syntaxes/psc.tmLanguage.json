@@ -5,9 +5,12 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#strings" },
+    { "include": "#chars" },
     { "include": "#support-functions" },
     { "include": "#function-call" },
+    { "include": "#for-loop" },
     { "include": "#keywords" },
+    { "include": "#logical-operators" },
     { "include": "#storage" },
     { "include": "#declarations" },
     { "include": "#constants" },
@@ -25,13 +28,29 @@
       "name": "keyword.control.psc",
       "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant que|ftq|ftant|Début|Fin)\\b"
     },
+    "logical-operators": {
+      "name": "keyword.operator.logical",
+      "match": "(?i)\\b(et|ou|non)\\b"
+    },
+    "for-loop": {
+      "patterns": [
+        {
+          "match": "(?i)^\\s*(Pour)\\b.*?\\b(d[ée]croissant)\\b.*?\\b(Faire)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.psc" },
+            "2": { "name": "keyword.control.psc" },
+            "3": { "name": "keyword.control.psc" }
+          }
+        }
+      ]
+    },
     "support-functions": {
       "name": "support.function.psc",
-      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne)\\b"
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier)\\b"
     },
     "storage": {
       "patterns": [
-  { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b" },
+        { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b" },
         { "name": "storage.modifier.psc", "match": "(?i)\\b(Lexique|Fonction|Algorithme)\\b" }
       ]
     },
@@ -59,6 +78,10 @@
       "captures": { "1": { "name": "entity.name.function.call.psc" } }
     },
     "strings": { "name": "string.quoted.double.psc", "begin": "\"", "end": "\"" },
+    "chars": {
+      "name": "string.quoted.single.char.psc",
+      "match": "'(?:\\\\.|[^\\\\'])'"
+    },
     "constants": {
       "patterns": [
         { "name": "constant.numeric.psc", "match": "\\b\\d+(\\.\\d+)?\\b" },
@@ -66,6 +89,9 @@
       ]
     },
     "operators": { "name": "keyword.operator.assignment.psc", "match": "(\\leftarrow|←|÷)" },
-    "variables": { "name": "variable.other.psc", "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b" }
+    "variables": {
+      "name": "variable.other.psc",
+      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant(?:\\s+que)?|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
+    }
   }
 }

@@ -6,7 +6,7 @@
       "Début",
       "\t$0",
       "Fin",
-      "/**",
+      "/*",
       "Lexique :",
       "${2:variable} : ${3:type}",
       "*/"
@@ -20,7 +20,7 @@
       "Début",
       "\t$0",
       "Fin",
-      "/**",
+      "/*",
       "Lexique :",
       "${4:variable} : ${5:type}",
       "*/"
