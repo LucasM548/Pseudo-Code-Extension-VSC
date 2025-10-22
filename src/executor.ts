@@ -297,7 +297,7 @@ function transformCompositeConstructors(expression: string): string {
                         return `${field.name} = ${value}`;
                     });
                     
-                    const replacement = `{${fieldAssignments.join(', ')}}`;
+                    const replacement = `__PSC_TABLE_START__{${fieldAssignments.join(', ')}}__PSC_TABLE_END__`;
                     const before = result.substring(0, startPos);
                     const after = result.substring(closeParenPos + 1);
                     tempResult = before + replacement + after;
@@ -314,10 +314,10 @@ function transformCompositeConstructors(expression: string): string {
     
     // Transformer les littéraux: <val1, val2, ...> en tables Lua avec champs nommés si possible
     // Attention aux chevrons dans les comparaisons
-    result = result.replace(/<([^>]+)>/g, (match, content) => {
+    result = result.replace(/(?<![\w\s])<([^>]+)>/g, (match, content) => {
         // Vérifier si c'est un littéral de structure (contient des virgules ou des valeurs)
         const trimmedContent = content.trim();
-        if (trimmedContent.includes(',') || trimmedContent.match(/^["'\d\[\{]/) || trimmedContent.match(/^\w+\(/)) {
+        if (trimmedContent.includes(',') || trimmedContent.match(/^["'{]/) || trimmedContent.match(/^\w+\s*\(/)) {
             // Essayer de trouver un type composite correspondant
             const args = smartSplitArgs(content).filter((a: string) => a);
             
@@ -335,11 +335,11 @@ function transformCompositeConstructors(expression: string): string {
                     const value = args[index] || 'nil';
                     return `${field.name} = ${value}`;
                 });
-                return `{${fieldAssignments.join(', ')}}`;
+                return `__PSC_TABLE_START__{${fieldAssignments.join(', ')}}__PSC_TABLE_END__`;
             }
             
             // Sinon, créer une table avec indices numériques
-            return `{${content}}`;
+            return `__PSC_TABLE_START__{${content}}__PSC_TABLE_END__`;
         }
         return match; // Laisser tel quel si ce n'est pas un littéral
     });
@@ -382,8 +382,9 @@ function transpileToLua(pscCode: string): string {
         }
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
         
-        // Ignorer les déclarations de types composites
+        // Ignorer les déclarations de types composites et tableaux
         if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*<.*>$/iu.test(trimmedLine)) continue;
+        if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*tableau/iu.test(trimmedLine)) continue;
 
         if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
             const isFunctionEnd = functionStack.length > 0 && /^\s*Fin\b/i.test(trimmedLine);
@@ -483,15 +484,30 @@ function transpileToLua(pscCode: string): string {
                 .replace(/ième\s*\(([^,]+)\s*,\s*([^)]+)\)/gi, 'string.sub($1, $2, $2)')
                 .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
                 .replace(/\bnon\b/gi, 'not').replace(/\bou\b/gi, 'or').replace(/\bet\b/gi, 'and')
-                .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//');
+                .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//')
+                .replace(/\bfichierOuvrir\b/gi, '__psc_fichierOuvrir')
+                .replace(/\bfichierFermer\b/gi, '__psc_fichierFermer')
+                .replace(/\bfichierLire\b/gi, '__psc_fichierLire')
+                .replace(/\bfichierFin\b/gi, '__psc_fichierFin')
+                .replace(/\bchaineVersEntier\b/gi, '__psc_chaineVersEntier')
+                .replace(/\bfichierCreer\b/gi, '__psc_fichierCreer')
+                .replace(/\bfichierEcrire\b/gi, '__psc_fichierEcrire')
+                .replace(/\bFIN_LIGNE\b/g, "'\n'");
 
             if (!isForLoop && !lineIsFullyProcessed) {
-                trimmedLine = trimmedLine.replace(/(?<![<>~=])=(?!=)/g, '==');
+                const parts = trimmedLine.split(/(__PSC_TABLE_START__|__PSC_TABLE_END__)/g);
+                for (let i = 0; i < parts.length; i += 4) {
+                    parts[i] = parts[i].replace(/(?<![<>~=])=(?!=)/g, '==');
+                }
+                trimmedLine = parts.join('');
             }
 
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
                 .replace(/lire\s*\(\)/gi, 'io.read()');
+
+            // Nettoyer les marqueurs de table
+            trimmedLine = trimmedLine.replace(/__PSC_TABLE_START__/g, '').replace(/__PSC_TABLE_END__/g, '');
 
             trimmedLine = trimmedLine.replace(/(?<![\p{L}0-9_])\[([^\]]*)\]/gu, '{$1}');
             trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\[([^\]]+)\]/gu, (match, varName, indicesString) => {
@@ -511,7 +527,61 @@ function transpileToLua(pscCode: string): string {
         luaCode += indentation + trimmedLine + finalComment + '\n';
     }
 
-    const helpers = `local function __psc_is_array(t)
+    const helpers = `local __psc_file_handles = {}
+local __psc_file_current_handle = 1
+
+local function __psc_fichierCreer(nomFichier)
+    return __psc_fichierOuvrir(nomFichier, "w")
+end
+
+local function __psc_fichierEcrire(handle, value)
+    if __psc_file_handles[handle] then
+        __psc_file_handles[handle]:write(tostring(value))
+    end
+end
+
+local function __psc_fichierOuvrir(nomFichier, mode)
+    mode = mode or "r"
+    local file, err = io.open(nomFichier, mode)
+    if not file then
+        print("Erreur d'ouverture du fichier: " .. tostring(err))
+        return nil
+    end
+    local handle = __psc_file_current_handle
+    __psc_file_handles[handle] = file
+    __psc_file_current_handle = __psc_file_current_handle + 1
+    return handle
+end
+
+local function __psc_fichierFermer(handle)
+    if __psc_file_handles[handle] then
+        __psc_file_handles[handle]:close()
+        __psc_file_handles[handle] = nil
+    end
+end
+
+local function __psc_fichierLire(handle)
+    if __psc_file_handles[handle] then
+        return __psc_file_handles[handle]:read()
+    end
+    return nil
+end
+
+local function __psc_fichierFin(handle)
+    if __psc_file_handles[handle] then
+        local pos = __psc_file_handles[handle]:seek()
+        local _, err = __psc_file_handles[handle]:read(0)
+        __psc_file_handles[handle]:seek("set", pos)
+        return err == "end of file"
+    end
+    return true
+end
+
+local function __psc_chaineVersEntier(chaine)
+    return tonumber(chaine) or 0
+end
+
+local function __psc_is_array(t)
     if type(t) ~= 'table' then return false end
     local i = 0
     for _ in pairs(t) do

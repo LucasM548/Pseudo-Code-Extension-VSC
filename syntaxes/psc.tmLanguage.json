@@ -46,12 +46,26 @@
     },
     "support-functions": {
       "name": "support.function.psc",
-      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier)\\b"
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier|fichierCreer|fichierEcrire)\\b"
     },
     "storage": {
       "patterns": [
         { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b" },
-        { "name": "storage.modifier.psc", "match": "(?i)\\b(Lexique|Fonction|Algorithme)\\b" }
+        { "name": "storage.modifier.psc", "match": "(?i)\\b(Lexique|Fonction|Algorithme)\\b" },
+        {
+          "name": "entity.name.type.declaration.psc",
+          "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*=",
+          "captures": {
+            "1": { "name": "entity.name.type.psc" }
+          }
+        },
+        {
+          "name": "storage.type.custom.psc",
+          "match": "(?<=:)\\s*([A-Z][a-zA-Z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "entity.name.type.psc" }
+          }
+        }
       ]
     },
     "declarations": {
@@ -85,7 +99,8 @@
     "constants": {
       "patterns": [
         { "name": "constant.numeric.psc", "match": "\\b\\d+(\\.\\d+)?\\b" },
-        { "name": "constant.language.boolean.psc", "match": "(?i)\\b(vrai|faux)\\b" }
+        { "name": "constant.language.boolean.psc", "match": "(?i)\\b(vrai|faux)\\b" },
+        { "name": "constant.language.psc", "match": "\\bFIN_LIGNE\\b" }
       ]
     },
     "operators": { "name": "keyword.operator.assignment.psc", "match": "(\\leftarrow|←|÷)" },
