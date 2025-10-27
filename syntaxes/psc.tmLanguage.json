@@ -26,7 +26,7 @@
     },
     "keywords": {
       "name": "keyword.control.psc",
-      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant que|ftq|ftant|Début|Fin)\\b"
+      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant que|ftq|ftant|Début|Fin)\\b"
     },
     "logical-operators": {
       "name": "keyword.operator.logical",
@@ -35,11 +35,16 @@
     "for-loop": {
       "patterns": [
         {
-          "match": "(?i)^\\s*(Pour)\\b.*?\\b(d[ée]croissant)\\b.*?\\b(Faire)\\b",
+          "match": "(?i)\\b(Pour)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(de|allant\\s+de)\\s+(.+?)\\s+(à|a)\\s+(.+?)(?:\\s+(d[ée]croissant))?\\s+(Faire)\\s*:?",
           "captures": {
             "1": { "name": "keyword.control.psc" },
-            "2": { "name": "keyword.control.psc" },
-            "3": { "name": "keyword.control.psc" }
+            "2": { "name": "variable.other.psc" },
+            "3": { "name": "keyword.control.psc" },
+            "4": { "name": "variable.other.psc" },
+            "5": { "name": "keyword.control.psc" },
+            "6": { "name": "variable.other.psc" },
+            "7": { "name": "keyword.control.psc" },
+            "8": { "name": "keyword.control.psc" }
           }
         }
       ]
@@ -106,7 +111,7 @@
     "operators": { "name": "keyword.operator.assignment.psc", "match": "(\\leftarrow|←|÷)" },
     "variables": {
       "name": "variable.other.psc",
-      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|de|à|Faire|fpour|Tant(?:\\s+que)?|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
+      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)?|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
   }
 }
