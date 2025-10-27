@@ -1,189 +1,75 @@
-// executor.ts
+/**
+ * Transpileur optimisé et simplifié pour Pseudo-Code vers Lua
+ */
 
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { exec } from 'child_process';
-
-interface ParamInfo {
-    name: string;
-    isInOut: boolean;
-}
-
-interface FunctionInfo {
-    name: string;
-    params: ParamInfo[];
-    inOutParamNames: string[];
-    getInOutArgsToReassign: (callArgs: string[]) => string[];
-}
-
-interface CompositeField {
-    name: string;
-    type: string;
-}
-
-interface CompositeType {
-    name: string;
-    fields: CompositeField[];
-}
-
-const functionRegistry = new Map<string, FunctionInfo>();
-const compositeTypeRegistry = new Map<string, CompositeType>();
+import { PATTERNS, LUA_REPLACEMENTS, FUNCTION_MAPPING, LUA_HELPERS } from './constants';
+import { normalizeType, smartSplitArgs } from './utils';
+import { FunctionRegistry } from './functionRegistry';
+import { CompositeTypeRegistry } from './compositeTypes';
 
 /**
- * Analyse l'ensemble du code pour cataloguer toutes les fonctions, leurs paramètres,
- * et identifier ceux qui sont marqués comme InOut.
- * @param pscCode Le code source complet en Pseudo-Code.
+ * Collecte les types de variables déclarées dans le code
  */
-function collectFunctionInfo(pscCode: string): void {
-    functionRegistry.clear();
-    const lines = pscCode.split('\n');
-    const funcRegex = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)\s*\((.*)\)/iu;
-
-    for (const line of lines) {
-        const funcMatch = funcRegex.exec(line);
-        if (funcMatch) {
-            const name = funcMatch[1];
-            let paramsString = funcMatch[2];
-
-            const returnColon = paramsString.lastIndexOf(':');
-            const lastParen = paramsString.lastIndexOf(')');
-            if (returnColon > lastParen) {
-                paramsString = paramsString.substring(0, returnColon).trim();
-            }
-            if (paramsString.endsWith(')')) {
-                paramsString = paramsString.slice(0, -1);
-            }
-
-            const params: ParamInfo[] = [];
-            const inOutParamNames: string[] = [];
-
-            if (paramsString.trim() !== '') {
-                paramsString.split(/,(?![^(\[]*[)\]])/g).forEach(p => {
-                    const paramDef = p.split(':')[0].trim();
-                    const isInOut = /\bInOut\b/i.test(paramDef);
-                    const paramName = paramDef.replace(/\bInOut\b/i, '').trim();
-                    if (paramName) {
-                        params.push({ name: paramName, isInOut });
-                        if (isInOut) {
-                            inOutParamNames.push(paramName);
-                        }
-                    }
-                });
-            }
-
-            functionRegistry.set(name, {
-                name,
-                params,
-                inOutParamNames,
-                getInOutArgsToReassign: (callArgs: string[]) => {
-                    const argsToReassign: string[] = [];
-                    params.forEach((param, index) => {
-                        if (param.isInOut && callArgs[index]) {
-                            // On s'assure que l'argument est bien un nom de variable simple
-                            const arg = callArgs[index].trim();
-                            if (/^[\p{L}_][\p{L}0-9_]*$/u.test(arg)) {
-                                argsToReassign.push(arg);
-                            }
-                        }
-                    });
-                    return argsToReassign;
-                }
-            });
-        }
-    }
-}
-
-/**
- * Collecte tous les types composites déclarés dans le code.
- * Exemple: Date = < jour : entier, mois : entier, annee : entier >
- * @param pscCode Le code source en Pseudo-Code.
- */
-function collectCompositeTypes(pscCode: string): void {
-    compositeTypeRegistry.clear();
-    const lines = pscCode.split('\n');
-    
-    for (const line of lines) {
-        const trimmedLine = line.trim();
-        // Détecter: TypeName = < field1 : type1, field2 : type2, ... >
-        const compositeMatch = trimmedLine.match(/^([\p{L}_][\p{L}0-9_]*)\s*=\s*<\s*(.+?)\s*>$/iu);
-        
-        if (compositeMatch) {
-            const typeName = compositeMatch[1];
-            const fieldsStr = compositeMatch[2];
-            const fields: CompositeField[] = [];
-            
-            // Parser les champs (peut contenir tableau Type[...] ou types simples)
-            const fieldParts = fieldsStr.split(',');
-            
-            for (const fieldPart of fieldParts) {
-                const fieldMatch = fieldPart.trim().match(/^([\p{L}_][\p{L}0-9_]*)\s*:\s*(.+)$/iu);
-                if (fieldMatch) {
-                    const fieldName = fieldMatch[1];
-                    const fieldType = fieldMatch[2].trim();
-                    fields.push({ name: fieldName, type: fieldType });
-                }
-            }
-            
-            // Enregistrer avec la clé en minuscules pour recherche insensible à la casse
-            compositeTypeRegistry.set(typeName.toLowerCase(), { name: typeName, fields });
-        }
-    }
-}
-
-/**
- * Analyse le code pseudo-code pour extraire les types de toutes les variables déclarées.
- * @param pscCode Le code source en Pseudo-Code.
- * @returns Un objet associant les noms de variables à leur type.
- */
-function collectVariableTypes(pscCode: string): { [key: string]: string } {
-    const variableTypes: { [key: string]: string } = {};
+function collectVariableTypes(pscCode: string): Map<string, string> {
+    const variableTypes = new Map<string, string>();
     const lines = pscCode.split('\n');
 
     for (const line of lines) {
         const trimmedLine = line.trim();
-        // Matcher les déclarations avec types primitifs ET types composites personnalisés
-        const declarationMatch = trimmedLine.match(/^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_]+)/iu);
-        if (declarationMatch && !/^\s*Fonction/i.test(trimmedLine)) {
+
+        // Déclarations de variables simples
+        const declarationMatch = PATTERNS.VARIABLE_DECLARATION.exec(trimmedLine);
+        if (declarationMatch && !PATTERNS.FUNCTION_DECLARATION.test(trimmedLine)) {
             const rawType = declarationMatch[2];
-            // Normaliser seulement les types primitifs, garder les types composites tels quels
-            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(rawType) 
-                ? normalizeType(rawType.toLowerCase()) 
+            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(rawType)
+                ? normalizeType(rawType)
                 : rawType;
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
             varNames.forEach(v => {
-                if (v) variableTypes[v] = type;
+                if (v) variableTypes.set(v, type);
             });
         }
-        const funcMatch = trimmedLine.match(/^\s*Fonction\s+[\p{L}0-9_]+\s*\((.*)\)/iu);
-        if (funcMatch) {
-            let paramsString = funcMatch[1];
-            const lastParen = paramsString.lastIndexOf(')');
-            const returnColon = paramsString.lastIndexOf(':');
 
-            if (returnColon > lastParen) {
-                paramsString = paramsString.substring(0, returnColon).trim();
-                if (paramsString.endsWith(')')) {
-                    paramsString = paramsString.slice(0, -1);
+        // Paramètres de fonction
+        const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(trimmedLine);
+        if (funcMatch) {
+            let paramsString = funcMatch[2];
+            
+            // Trouver la parenthèse fermante qui correspond à l'ouverture
+            let depth = 0;
+            let endOfParams = -1;
+            for (let i = 0; i < paramsString.length; i++) {
+                if (paramsString[i] === '(') depth++;
+                else if (paramsString[i] === ')') {
+                    depth--;
+                    if (depth < 0) {
+                        endOfParams = i;
+                        break;
+                    }
                 }
             }
+            
+            if (endOfParams !== -1) {
+                paramsString = paramsString.substring(0, endOfParams);
+            }
 
-            const params = paramsString.split(/,(?![^(\[]*[)\]])/g);
+            const params = smartSplitArgs(paramsString);
             params.forEach(p => {
                 const parts = p.split(':').map(part => part.trim());
                 if (parts.length === 2) {
                     const varName = parts[0].replace(/\bInOut\b/i, '').trim();
                     const rawTypeName = parts[1];
-                    // Extraire juste le nom du type (sans tableau[...] etc.)
                     const typeMatch = rawTypeName.match(/^([\p{L}0-9_]+)/iu);
                     if (typeMatch) {
                         const typeName = typeMatch[1];
-                        // Normaliser seulement les types primitifs
                         const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(typeName)
-                            ? normalizeType(typeName.toLowerCase())
+                            ? normalizeType(typeName)
                             : typeName;
-                        if (varName) variableTypes[varName] = finalType;
+                        if (varName) variableTypes.set(varName, finalType);
                     }
                 }
             });
@@ -192,160 +78,6 @@ function collectVariableTypes(pscCode: string): { [key: string]: string } {
     return variableTypes;
 }
 
-/**
- * Normalise un nom de type (variantes sans accent, différentes orthographes) en forme canonique.
- */
-function normalizeType(raw: string): string {
-    const t = (raw || '').toLowerCase();
-    if (/^booléen$/.test(t)) return 'booléen';
-    if (/^re[ée]l$/.test(t)) return 'réel';
-    if (/^entier$/.test(t)) return 'entier';
-    if (/^cha(iî)ne$/.test(t)) return 'chaîne';
-    if (/^caract[eè]re$/.test(t)) return 'caractère';
-    if (/^tableau$/.test(t)) return 'tableau';
-    return t;
-}
-
-/**
- * Découpe une chaîne d'arguments en tenant compte des parenthèses, crochets et accolades.
- */
-function smartSplitArgs(argsStr: string): string[] {
-    const args: string[] = [];
-    let current = '';
-    let depth = 0;
-    let inString = false;
-    let stringChar = '';
-    
-    for (let i = 0; i < argsStr.length; i++) {
-        const char = argsStr[i];
-        
-        if (!inString && (char === '"' || char === "'")) {
-            inString = true;
-            stringChar = char;
-            current += char;
-        } else if (inString && char === stringChar && argsStr[i-1] !== '\\') {
-            inString = false;
-            current += char;
-        } else if (!inString && (char === '(' || char === '[' || char === '{')) {
-            depth++;
-            current += char;
-        } else if (!inString && (char === ')' || char === ']' || char === '}')) {
-            depth--;
-            current += char;
-        } else if (!inString && char === ',' && depth === 0) {
-            args.push(current.trim());
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-    
-    if (current.trim()) {
-        args.push(current.trim());
-    }
-    
-    return args;
-}
-
-/**
- * Trouve la parenthèse fermante correspondante.
- */
-function findMatchingParen(str: string, startPos: number): number {
-    let depth = 1;
-    for (let i = startPos + 1; i < str.length; i++) {
-        if (str[i] === '(') depth++;
-        else if (str[i] === ')') {
-            depth--;
-            if (depth === 0) return i;
-        }
-    }
-    return -1;
-}
-
-/**
- * Transforme les constructeurs de types composites et les littéraux en tables Lua.
- * TypeName(val1, val2, ...) -> {field1 = val1, field2 = val2, ...}
- * <val1, val2, ...> -> {val1, val2, ...}
- */
-function transformCompositeConstructors(expression: string): string {
-    let result = expression;
-    let changed = true;
-    
-    // Répéter jusqu'à ce qu'il n'y ait plus de changements (pour gérer les constructeurs imbriqués)
-    while (changed) {
-        changed = false;
-        
-        // Transformer les constructeurs: TypeName(args...) en tables Lua avec noms de champs
-        compositeTypeRegistry.forEach((compositeType, typeNameKey) => {
-            // Le nom original du type (avec casse correcte) est dans compositeType.name
-            const typeName = compositeType.name;
-            const constructorRegex = new RegExp(`\\b${typeName}\\s*\\(`, 'gi');
-            let match;
-            let tempResult = result;
-            
-            while ((match = constructorRegex.exec(result)) !== null) {
-                const startPos = match.index;
-                const openParenPos = match.index + match[0].length - 1;
-                const closeParenPos = findMatchingParen(result, openParenPos);
-                
-                if (closeParenPos !== -1) {
-                    const argsStr = result.substring(openParenPos + 1, closeParenPos);
-                    const args = smartSplitArgs(argsStr).filter((a: string) => a);
-                    
-                    const fieldAssignments = compositeType.fields.map((field, index) => {
-                        const value = args[index] || 'nil';
-                        return `${field.name} = ${value}`;
-                    });
-                    
-                    const replacement = `__PSC_TABLE_START__{${fieldAssignments.join(', ')}}__PSC_TABLE_END__`;
-                    const before = result.substring(0, startPos);
-                    const after = result.substring(closeParenPos + 1);
-                    tempResult = before + replacement + after;
-                    
-                    if (tempResult !== result) {
-                        result = tempResult;
-                        changed = true;
-                        break; // Recommencer la recherche depuis le début
-                    }
-                }
-            }
-        });
-    }
-    
-    // Transformer les littéraux: <val1, val2, ...> en tables Lua avec champs nommés si possible
-    // Attention aux chevrons dans les comparaisons
-    result = result.replace(/(?<![\w\s])<([^>]+)>/g, (match, content) => {
-        // Vérifier si c'est un littéral de structure (contient des virgules ou des valeurs)
-        const trimmedContent = content.trim();
-        if (trimmedContent.includes(',') || trimmedContent.match(/^["'{]/) || trimmedContent.match(/^\w+\s*\(/)) {
-            // Essayer de trouver un type composite correspondant
-            const args = smartSplitArgs(content).filter((a: string) => a);
-            
-            // Chercher un type composite avec le même nombre de champs
-            let matchingType: CompositeType | undefined;
-            compositeTypeRegistry.forEach((compositeType) => {
-                if (compositeType.fields.length === args.length) {
-                    matchingType = compositeType;
-                }
-            });
-            
-            // Si on trouve un type correspondant, créer une table avec champs nommés
-            if (matchingType) {
-                const fieldAssignments = matchingType.fields.map((field, index) => {
-                    const value = args[index] || 'nil';
-                    return `${field.name} = ${value}`;
-                });
-                return `__PSC_TABLE_START__{${fieldAssignments.join(', ')}}__PSC_TABLE_END__`;
-            }
-            
-            // Sinon, créer une table avec indices numériques
-            return `__PSC_TABLE_START__{${content}}__PSC_TABLE_END__`;
-        }
-        return match; // Laisser tel quel si ce n'est pas un littéral
-    });
-    
-    return result;
-}
 
 /**
  * Transpile le code Pseudo-Code en code Lua exécutable.
@@ -353,15 +85,19 @@ function transformCompositeConstructors(expression: string): string {
  * @returns Le code Lua transpilé.
  */
 function transpileToLua(pscCode: string): string {
-    collectFunctionInfo(pscCode);
-    collectCompositeTypes(pscCode);
+    const functionRegistry = new FunctionRegistry();
+    functionRegistry.collect(pscCode);
+
+    const compositeTypeRegistry = new CompositeTypeRegistry();
+    compositeTypeRegistry.collect(pscCode);
+
     const variableTypes = collectVariableTypes(pscCode);
 
     let cleanedCode = pscCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/Lexique\s*:?[\s\S]*/i, '');
     let luaCode = '';
     const lines = cleanedCode.split('\n');
     let isInsideAlgorithmBlock = false;
-    const functionStack: FunctionInfo[] = [];
+    const functionStack: any[] = [];
 
     for (const line of lines) {
         const originalLineForIndentation = line;
@@ -381,7 +117,7 @@ function transpileToLua(pscCode: string): string {
             continue;
         }
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
-        
+
         // Ignorer les déclarations de types composites et tableaux
         if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*<.*>$/iu.test(trimmedLine)) continue;
         if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*tableau/iu.test(trimmedLine)) continue;
@@ -400,7 +136,7 @@ function transpileToLua(pscCode: string): string {
         }
         if (!lineIsFullyProcessed && /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu.test(trimmedLine)) {
             const varName = trimmedLine.split('←')[0].trim();
-            const varType = normalizeType((variableTypes[varName] || '').toLowerCase());
+            const varType = normalizeType((variableTypes.get(varName) || '').toLowerCase());
             if (varType === 'entier' || varType === 'réel') {
                 trimmedLine = `${varName} = tonumber(io.read())`;
             } else {
@@ -430,7 +166,7 @@ function transpileToLua(pscCode: string): string {
                         const funcInfo = functionRegistry.get(funcName);
                         if (funcInfo && funcInfo.inOutParamNames.length > 0) {
                             const args = match[2].split(',').map(a => a.trim());
-                            const varsToReassign = funcInfo.getInOutArgsToReassign(args);
+                            const varsToReassign = functionRegistry.getInOutArgsToReassign(funcName, args);
 
                             if (varsToReassign.length > 0) {
                                 const callExpression = match[0];
@@ -466,7 +202,7 @@ function transpileToLua(pscCode: string): string {
             }
 
             // Transformer les constructeurs et littéraux de types composites
-            trimmedLine = transformCompositeConstructors(trimmedLine);
+            trimmedLine = compositeTypeRegistry.transform(trimmedLine);
 
             const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : undefined;
             if (currentFunc && currentFunc.inOutParamNames.length > 0) {

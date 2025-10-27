@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
+import { PATTERNS } from './constants';
 
 export function formatDocument(document: vscode.TextDocument): vscode.TextEdit[] {
     const edits: vscode.TextEdit[] = [];
     let indentationLevel = 0;
     const tabChar = '\t';
 
-    // Expressions régulières pour chaque type d'instruction
+    // Patterns pour l'indentation
     const openingPattern = /^\s*(Début|.*(Alors|Faire)\s*:)\s*$/i;
-    const closingPattern = /^\s*(Fin|fsi|fpour|ftq|ftant|Sinon(?:\s*:)? )\s*$/i;
+    const closingPattern = PATTERNS.CLOSING_KEYWORDS;
 
     for (let i = 0; i < document.lineCount; i++) {
         const line = document.lineAt(i);
