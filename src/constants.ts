@@ -7,7 +7,7 @@
 export const KEYWORDS = {
     CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant'],
     BLOCKS: ['début', 'fin', 'algorithme', 'fonction'],
-    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau'],
+    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste'],
     BOOLEAN: ['vrai', 'faux'],
     OPERATORS: ['et', 'ou', 'non', 'mod'],
     IO: ['écrire', 'lire', 'retourner', 'retourne'],
@@ -63,7 +63,7 @@ export const PATTERNS = {
     FUNCTION_CALL: /([\p{L}_][\p{L}0-9_]+)\s*\(([^)]*)\)/gu,
 
     // Variables
-    VARIABLE_DECLARATION: /^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_]+)/iu,
+    VARIABLE_DECLARATION: /^([\p{L}0-9_,\s]+?)\s*:\s*([\p{L}0-9_]+(?:\([^()]*\))?)/iu,
     ASSIGNMENT: /←/,
     READ_ASSIGNMENT: /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu,
 
@@ -117,7 +117,8 @@ export const TYPE_MAPPING: Record<string, string> = {
     'chaine': 'chaîne',
     'caractère': 'caractère',
     'caractere': 'caractère',
-    'tableau': 'tableau'
+    'tableau': 'tableau',
+    'liste': 'liste'
 };
 
 // Remplacements de symboles pour Lua
