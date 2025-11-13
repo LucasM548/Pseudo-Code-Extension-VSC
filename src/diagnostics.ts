@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import { KNOWN_IDENTIFIERS, PATTERNS } from './constants';
-import { cleanLineFromComments, maskStrings, maskFieldAccess } from './utils';
+import { KNOWN_IDENTIFIERS, PATTERNS, BUILTIN_FUNCTION_ARITY } from './constants';
+import { cleanLineFromComments, maskStrings, maskFieldAccess, smartSplitArgs, findMatchingParen } from './utils';
 
 /**
  * Cœur du Linter avec gestion de la portée lexicale et déclaration implicite.
  */
 export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.DiagnosticCollection): void {
+
     if (doc.languageId !== 'psc') {
         return;
     }
@@ -84,6 +85,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             const lhsText = trimmedText.substring(0, assignmentIndex).trim();
             const rhsText = trimmedText.substring(assignmentIndex + 1).trim();
             checkVariablesInExpression(rhsText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
+            checkFunctionCallsInExpression(rhsText, declaredFunctions, line, diagnostics);
             const lhsVarMatch = lhsText.match(/^([\p{L}_][\p{L}0-9_]*)/u);
             if (lhsVarMatch) {
                 const lhsVar = lhsVarMatch[1];
@@ -93,6 +95,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         } else {
             checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
+            checkFunctionCallsInExpression(trimmedText, declaredFunctions, line, diagnostics);
         }
 
         const isClosingBlock = PATTERNS.CLOSING_KEYWORDS.test(trimmedText);
@@ -150,6 +153,83 @@ function checkVariablesInExpression(
             const range = new vscode.Range(line.lineNumber, finalColumn, line.lineNumber, finalColumn + variable.length);
             diagnostics.push(new vscode.Diagnostic(range, `L'identifiant '${variable}' est utilisé avant d'avoir reçu une valeur.`, vscode.DiagnosticSeverity.Error));
         }
+    }
+}
+function checkFunctionCallsInExpression(
+    expression: string,
+    declaredFunctions: Set<string>,
+    line: vscode.TextLine,
+    diagnostics: vscode.Diagnostic[]
+): void {
+    // Masquer les strings et les accès aux champs pour éviter les faux positifs
+    let masked = maskStrings(expression);
+    masked = maskFieldAccess(masked);
+
+    // Calculer le décalage de l'expression dans la ligne pour les diagnostics précis
+    const expressionOffsetInLine = line.text.indexOf(expression);
+    if (expressionOffsetInLine === -1) return;
+
+    let i = 0;
+    while (i < masked.length) {
+        const ch = masked[i];
+        // Détection du début d'identifiant en respectant une limite de mot
+        const prev = i > 0 ? masked[i - 1] : ' ';
+        const isStart = /[\p{L}_]/u.test(ch) && !/[\p{L}0-9_]/u.test(prev);
+        if (!isStart) {
+            i++;
+            continue;
+        }
+
+        // Extraire le nom de fonction potentiel
+        const idMatch = masked.slice(i).match(/^[\p{L}_][\p{L}0-9_]*/u);
+        if (!idMatch) {
+            i++;
+            continue;
+        }
+        const funcName = idMatch[0];
+        let j = i + funcName.length;
+        // Sauter espaces
+        while (j < masked.length && /\s/.test(masked[j])) j++;
+
+        if (j < masked.length && masked[j] === '(') {
+            // Trouver la parenthèse fermante correspondante
+            const closeIdx = findMatchingParen(masked, j);
+            if (closeIdx === -1) {
+                // Parenthèses non fermées: on arrête ici pour éviter des faux positifs
+                break;
+            }
+
+            const argsStr = expression.slice(j + 1, closeIdx);
+            const args = smartSplitArgs(argsStr);
+            const arity = args.length;
+            const lower = funcName.toLowerCase();
+
+            if (Object.prototype.hasOwnProperty.call(BUILTIN_FUNCTION_ARITY, lower)) {
+                const expected = BUILTIN_FUNCTION_ARITY[lower];
+                if (expected !== arity) {
+                    const startCol = expressionOffsetInLine + i;
+                    const range = new vscode.Range(line.lineNumber, startCol, line.lineNumber, startCol + funcName.length);
+                    diagnostics.push(new vscode.Diagnostic(
+                        range,
+                        `La fonction intégrée '${funcName}' attend ${expected} argument(s), mais ${arity} fourni(s).`,
+                        vscode.DiagnosticSeverity.Error
+                    ));
+                }
+            } else if (!declaredFunctions.has(funcName) && !KNOWN_IDENTIFIERS.has(lower)) {
+                const startCol = expressionOffsetInLine + i;
+                const range = new vscode.Range(line.lineNumber, startCol, line.lineNumber, startCol + funcName.length);
+                diagnostics.push(new vscode.Diagnostic(
+                    range,
+                    `La fonction '${funcName}' n'est pas déclarée.`,
+                    vscode.DiagnosticSeverity.Error
+                ));
+            }
+
+            i = closeIdx + 1;
+            continue;
+        }
+
+        i = j; // Continuer après l'identifiant si pas d'appel
     }
 }
 

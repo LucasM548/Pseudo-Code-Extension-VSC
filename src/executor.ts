@@ -119,7 +119,7 @@ function transpileToLua(pscCode: string): string {
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
 
         // Ignorer les déclarations de types composites et tableaux
-        if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*<.*>$/iu.test(trimmedLine)) continue;
+        if (PATTERNS.COMPOSITE_TYPE.test(trimmedLine)) continue;
         if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*tableau/iu.test(trimmedLine)) continue;
 
         if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
@@ -204,6 +204,35 @@ function transpileToLua(pscCode: string): string {
             // Transformer les constructeurs et littéraux de types composites
             trimmedLine = compositeTypeRegistry.transform(trimmedLine);
 
+            // Appliquer le mapping des fonctions PSC -> helpers Lua (incluant TDA Liste)
+            for (const [pscName, helperName] of Object.entries(FUNCTION_MAPPING)) {
+                const re = new RegExp(`(?<![\\p{L}0-9_])${pscName}\\s*\\(`, 'giu');
+                trimmedLine = trimmedLine.replace(re, `${helperName}(`);
+            }
+
+            // Réécrire les appels mutateurs de liste utilisés comme procédures en réaffectation du 1er argument
+            const mutators = new Set([
+                '__psc_liste_ajout_tete',
+                '__psc_liste_suppression_tete',
+                '__psc_liste_ajout_queue',
+                '__psc_liste_suppression_queue',
+                '__psc_liste_ajout',
+                '__psc_liste_suppression',
+                '__psc_liste_change'
+            ]);
+            for (const helperName of mutators) {
+                const simpleCallRe = new RegExp(`^\\s*${helperName}\\s*\\((.*)\\)\\s*;?\\s*$`);
+                const m = trimmedLine.match(simpleCallRe);
+                if (m) {
+                    const args = smartSplitArgs(m[1]);
+                    const firstArg = (args[0] || '').trim();
+                    if (/^[\p{L}_][\p{L}0-9_]*$/u.test(firstArg)) {
+                        trimmedLine = `${firstArg} = ${helperName}(${args.join(', ')})`;
+                    }
+                    break;
+                }
+            }
+
             const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : undefined;
             if (currentFunc && currentFunc.inOutParamNames.length > 0) {
                 trimmedLine = trimmedLine
@@ -231,11 +260,34 @@ function transpileToLua(pscCode: string): string {
                 .replace(/\bFIN_LIGNE\b/g, "'\n'");
 
             if (!isForLoop && !lineIsFullyProcessed) {
-                const parts = trimmedLine.split(/(__PSC_TABLE_START__|__PSC_TABLE_END__)/g);
-                for (let i = 0; i < parts.length; i += 4) {
-                    parts[i] = parts[i].replace(/(?<![<>~=])=(?!=)/g, '==');
+                const conditionEq = (s: string) => s.replace(/(^|[^<>=~])=(?!=)/g, '$1==');
+                let handledCondition = false;
+                // Cibler uniquement les conditions if/elseif/while
+                trimmedLine = trimmedLine.replace(/^(\s*if\s+)(.*?)(\s+then\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                    handledCondition = true;
+                    return `${p1}${conditionEq(cond)}${p3}`;
+                });
+                trimmedLine = trimmedLine.replace(/^(\s*elseif\s+)(.*?)(\s+then\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                    handledCondition = true;
+                    return `${p1}${conditionEq(cond)}${p3}`;
+                });
+                trimmedLine = trimmedLine.replace(/^(\s*while\s+)(.*?)(\s+do\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                    handledCondition = true;
+                    return `${p1}${conditionEq(cond)}${p3}`;
+                });
+
+                if (!handledCondition) {
+                    const parts = trimmedLine.split(/(__PSC_TABLE_START__|__PSC_TABLE_END__)/g);
+                    for (let i = 0; i < parts.length; i += 4) {
+                        // Protéger les affectations générées (ex: l = __psc_liste_...)
+                        parts[i] = parts[i].replace(/(\s)=(\s)/g, '$1__PSC_ASSIGN__$2');
+                        // Convertir les comparaisons '=' en '==' (sans lookbehind)
+                        parts[i] = parts[i].replace(/([^<>=~])=(?!=)/g, '$1==');
+                        // Restaurer les affectations
+                        parts[i] = parts[i].replace(/__PSC_ASSIGN__/g, '=');
+                    }
+                    trimmedLine = parts.join('');
                 }
-                trimmedLine = parts.join('');
             }
 
             trimmedLine = trimmedLine
@@ -263,107 +315,7 @@ function transpileToLua(pscCode: string): string {
         luaCode += indentation + trimmedLine + finalComment + '\n';
     }
 
-    const helpers = `local __psc_file_handles = {}
-local __psc_file_current_handle = 1
-
-local function __psc_fichierCreer(nomFichier)
-    return __psc_fichierOuvrir(nomFichier, "w")
-end
-
-local function __psc_fichierEcrire(handle, value)
-    if __psc_file_handles[handle] then
-        __psc_file_handles[handle]:write(tostring(value))
-    end
-end
-
-local function __psc_fichierOuvrir(nomFichier, mode)
-    mode = mode or "r"
-    local file, err = io.open(nomFichier, mode)
-    if not file then
-        print("Erreur d'ouverture du fichier: " .. tostring(err))
-        return nil
-    end
-    local handle = __psc_file_current_handle
-    __psc_file_handles[handle] = file
-    __psc_file_current_handle = __psc_file_current_handle + 1
-    return handle
-end
-
-local function __psc_fichierFermer(handle)
-    if __psc_file_handles[handle] then
-        __psc_file_handles[handle]:close()
-        __psc_file_handles[handle] = nil
-    end
-end
-
-local function __psc_fichierLire(handle)
-    if __psc_file_handles[handle] then
-        return __psc_file_handles[handle]:read()
-    end
-    return nil
-end
-
-local function __psc_fichierFin(handle)
-    if __psc_file_handles[handle] then
-        local pos = __psc_file_handles[handle]:seek()
-        local _, err = __psc_file_handles[handle]:read(0)
-        __psc_file_handles[handle]:seek("set", pos)
-        return err == "end of file"
-    end
-    return true
-end
-
-local function __psc_chaineVersEntier(chaine)
-    return tonumber(chaine) or 0
-end
-
-local function __psc_is_array(t)
-    if type(t) ~= 'table' then return false end
-    local i = 0
-    for _ in pairs(t) do
-        i = i + 1
-    end
-    local count = 0
-    for k in pairs(t) do
-        if type(k) == 'number' then count = count + 1 end
-    end
-    return count == i
-end
-
-local function __psc_serialize(v)
-    if type(v) == 'table' then
-        if __psc_is_array(v) then
-            local parts = {}
-            for i = 1, #v do
-                parts[#parts+1] = __psc_serialize(v[i])
-            end
-            return '[' .. table.concat(parts, ', ') .. ']'
-        else
-            local parts = {}
-            for k, val in pairs(v) do
-                parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
-            end
-            return '{' .. table.concat(parts, ', ') .. '}'
-        end
-    elseif type(v) == 'string' then
-        return v
-    elseif type(v) == 'boolean' then
-        return v and 'Vrai' or 'Faux'
-    else
-        return tostring(v)
-    end
-end
-
-local function __psc_write(...)
-    local args = {...}
-    local parts = {}
-    for i = 1, #args do
-        parts[i] = __psc_serialize(args[i])
-    end
-    print(table.concat(parts, ''))
-end
-`;
-
+    const helpers = LUA_HELPERS;
     return helpers + luaCode;
 }
 
