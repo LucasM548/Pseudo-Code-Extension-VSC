@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { formatDocument } from './formatter';
-import { refreshDiagnostics } from './diagnostics';
-import { executeCode } from './executor';
+import { executeCode } from './services/runner';
+import { linter } from './services/linter';
+import { handleSymbolReplacement as handleSymbolReplacementImpl } from './autoEdits/symbols';
 
 // Une "collection de diagnostics" est le conteneur de VS Code pour toutes nos erreurs
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('psc');
@@ -19,13 +20,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     // --- GESTION DE L'ANALYSE (DIAGNOSTICS) ---
     if (vscode.window.activeTextEditor) {
-        refreshDiagnostics(vscode.window.activeTextEditor.document, diagnosticsCollection);
+        linter.refresh(vscode.window.activeTextEditor.document, diagnosticsCollection);
     }
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
         if (editor) {
-            refreshDiagnostics(editor.document, diagnosticsCollection);
+            linter.refresh(editor.document, diagnosticsCollection);
         }
     }));
+
     context.subscriptions.push(vscode.workspace.onDidCloseTextDocument(doc => {
         diagnosticsCollection.delete(doc.uri);
     }));
@@ -49,7 +51,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // On déclenche l'analyse des erreurs à chaque modification
-        refreshDiagnostics(event.document, diagnosticsCollection);
+        linter.refresh(event.document, diagnosticsCollection);
 
         // On exécute la logique de remplacement pour symboles (flèche, ≤, ≥, ≠)
         handleSymbolReplacement(event);
@@ -68,48 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
  * - Ignore les remplacements quand on est dans un commentaire de ligne (//) ou dans une chaîne entre guillemets.
  */
 function handleSymbolReplacement(event: vscode.TextDocumentChangeEvent): void {
-    const changes = event.contentChanges;
-    if (changes.length === 0) return;
-
-    const lastChange = changes[0];
-    if (lastChange.rangeLength > 0) return;
-    if (!lastChange.text || lastChange.text.length > 1) return;
-
-    const insertPos = lastChange.range.start;
-    const line = event.document.lineAt(insertPos.line);
-
-    const lineCommentIndex = line.text.indexOf('//');
-    if (lineCommentIndex !== -1 && insertPos.character > lineCommentIndex) return;
-
-    const textBefore = line.text.substring(0, insertPos.character);
-    const quoteCount = (textBefore.match(/\"/g) || []).length;
-    if (quoteCount % 2 === 1) return;
-
-    const startIndex = Math.max(0, insertPos.character - 1);
-    const endIndex = insertPos.character + lastChange.text.length;
-    const twoChars = line.text.substring(startIndex, endIndex);
-
-    const replacements: { [k: string]: string } = {
-        '<-': '←',
-        '<=': '≤',
-        '>=': '≥',
-        '!=': '≠',
-        '=/': '≠'
-    };
-
-    const replacement = replacements[twoChars];
-    if (!replacement) return;
-
-    // Calculer la plage à remplacer dans le document
-    const rangeToReplace = new vscode.Range(
-        insertPos.with({ character: startIndex }),
-        insertPos.with({ character: endIndex })
-    );
-
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(event.document.uri, rangeToReplace, replacement);
-    vscode.workspace.applyEdit(edit);
+    handleSymbolReplacementImpl(event);
 }
-
 
 export function deactivate() { }

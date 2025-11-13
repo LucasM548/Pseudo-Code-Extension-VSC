@@ -177,7 +177,7 @@ export function extractFunctionParams(paramsString: string): Array<{ name: strin
             }
         }
     }
-    
+
     // Si on a trouvé une parenthèse fermante, on ne prend que ce qui est avant
     if (endOfParams !== -1) {
         paramsString = paramsString.substring(0, endOfParams);

@@ -36,7 +36,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             const newScope = new Set<string>();
             if (funcMatch) {
                 let paramsString = funcMatch[2];
-                
+
                 // Trouver la position de la parenthèse fermante qui correspond à l'ouverture
                 // pour séparer les paramètres du type de retour
                 let depth = 0;
@@ -51,7 +51,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
                         }
                     }
                 }
-                
+
                 // Si on a trouvé une parenthèse fermante, on ne prend que ce qui est avant
                 if (endOfParams !== -1) {
                     paramsString = paramsString.substring(0, endOfParams);

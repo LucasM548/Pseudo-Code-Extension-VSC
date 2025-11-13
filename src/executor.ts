@@ -1,5 +1,5 @@
 /**
- * Transpileur optimisé et simplifié pour Pseudo-Code vers Lua
+ * Transpileur Pseudo-Code vers Lua
  */
 
 import * as vscode from 'vscode';
@@ -38,7 +38,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
         const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(trimmedLine);
         if (funcMatch) {
             let paramsString = funcMatch[2];
-            
+
             // Trouver la parenthèse fermante qui correspond à l'ouverture
             let depth = 0;
             let endOfParams = -1;
@@ -52,7 +52,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
                     }
                 }
             }
-            
+
             if (endOfParams !== -1) {
                 paramsString = paramsString.substring(0, endOfParams);
             }
@@ -84,7 +84,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
  * @param pscCode Le code source en Pseudo-Code.
  * @returns Le code Lua transpilé.
  */
-function transpileToLua(pscCode: string): string {
+export function transpileToLua(pscCode: string): string {
     const functionRegistry = new FunctionRegistry();
     functionRegistry.collect(pscCode);
 
@@ -142,7 +142,7 @@ function transpileToLua(pscCode: string): string {
                 let path = varName;
                 let innerIndent = indentation;
                 for (let idx = 0; idx < ranges.length - 1; idx++) {
-                    const it = `__i${idx+1}`;
+                    const it = `__i${idx + 1}`;
                     const start = `((${ranges[idx].lo})) + 1`;
                     const finish = `((${ranges[idx].hi})) + 1`;
                     block += `${innerIndent}for ${it} = ${start}, ${finish}, 1 do` + '\n';

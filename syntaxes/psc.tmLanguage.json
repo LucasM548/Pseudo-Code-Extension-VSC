@@ -6,112 +6,141 @@
     { "include": "#comments" },
     { "include": "#strings" },
     { "include": "#chars" },
-    { "include": "#support-functions" },
-    { "include": "#function-call" },
+    { "include": "#constants" },
+    { "include": "#declarations" },
     { "include": "#for-loop" },
     { "include": "#keywords" },
     { "include": "#logical-operators" },
+    { "include": "#support-functions" },
     { "include": "#storage" },
-    { "include": "#declarations" },
-    { "include": "#constants" },
-    { "include": "#operators" },
+    { "include": "#operators-assignment" },
+    { "include": "#operators-arithmetic" },
+    { "include": "#operators-comparison" },
+    { "include": "#function-call" },
     { "include": "#variables" }
   ],
   "repository": {
     "comments": {
       "patterns": [
-        { "name": "comment.line.double-slash.psc", "match": "//.*" },
-        { "name": "comment.block.psc", "begin": "/\\*", "end": "\\*/" }
+        { "name": "comment.line.double-slash", "match": "//.*" },
+        { "name": "comment.block", "begin": "/\\*", "end": "\\*/" }
       ]
     },
     "keywords": {
-      "name": "keyword.control.psc",
-      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant que|ftq|ftant|Début|Fin)\\b"
+      "name": "keyword.control",
+      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin)\\b"
     },
     "logical-operators": {
-      "name": "keyword.operator.logical",
+      "name": "keyword.control",
       "match": "(?i)\\b(et|ou|non)\\b"
     },
     "for-loop": {
+      "begin": "(?i)\\b(Pour)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(de|allant\\s+de)\\b",
+      "beginCaptures": {
+        "1": { "name": "keyword.control" },
+        "2": { "name": "variable.other" },
+        "3": { "name": "keyword.control" }
+      },
+      "end": "(?i)\\b(Faire)\\b",
+      "endCaptures": {
+        "1": { "name": "keyword.control" }
+      },
       "patterns": [
         {
-          "match": "(?i)\\b(Pour)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(de|allant\\s+de)\\s+(.+?)\\s+(à|a)\\s+(.+?)(?:\\s+(d[ée]croissant))?\\s+(Faire)\\s*:?",
-          "captures": {
-            "1": { "name": "keyword.control.psc" },
-            "2": { "name": "variable.other.psc" },
-            "3": { "name": "keyword.control.psc" },
-            "4": { "name": "variable.other.psc" },
-            "5": { "name": "keyword.control.psc" },
-            "6": { "name": "variable.other.psc" },
-            "7": { "name": "keyword.control.psc" },
-            "8": { "name": "keyword.control.psc" }
-          }
-        }
+          "match": "(?i)\\b(à|a)\\b",
+          "name": "keyword.control"
+        },
+        { "include": "$self" }
       ]
     },
     "support-functions": {
-      "name": "support.function.psc",
+      "name": "support.function",
       "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier|fichierCreer|fichierEcrire)\\b"
     },
     "storage": {
       "patterns": [
-        { "name": "storage.type.psc", "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b" },
-        { "name": "storage.modifier.psc", "match": "(?i)\\b(Lexique|Fonction|Algorithme)\\b" },
+        { "name": "storage.modifier", "match": "(?i)\\b(Lexique)\\b" },
         {
-          "name": "entity.name.type.declaration.psc",
+          "name": "entity.name.type.declaration",
           "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*=",
-          "captures": {
-            "1": { "name": "entity.name.type.psc" }
-          }
+          "captures": { "1": { "name": "entity.name.type" } }
         },
         {
-          "name": "storage.type.custom.psc",
-          "match": "(?<=:)\\s*([A-Z][a-zA-Z0-9_]*)\\b",
-          "captures": {
-            "1": { "name": "entity.name.type.psc" }
-          }
+          "name": "storage.type",
+          "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b(?!\\s*\\()"
+        },
+        {
+          "name": "storage.type",
+          "match": "(?i)(?<=:)\\s*([A-Z][a-zA-Z0-9_]*)\\b(?!\\s*\\()"
         }
       ]
     },
     "declarations": {
       "patterns": [
         {
-          "match": "(?i)^\\s*(Fonction)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\([^)]*\\))?",
-          "captures": {
-            "1": { "name": "storage.modifier.psc" },
-            "2": { "name": "entity.name.function.psc" },
-            "3": { "name": "variable.parameter.psc" }
-          }
+          "begin": "(?i)^\\s*(Fonction)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\()",
+          "beginCaptures": {
+            "1": { "name": "storage.modifier" },
+            "2": { "name": "entity.name.function" },
+            "3": { "name": "punctuation.definition.parameters.begin.psc" }
+          },
+          "end": "(\\))",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.parameters.end.psc" }
+          },
+          "patterns": [
+            { "include": "$self" }
+          ]
         },
         {
           "match": "(?i)^\\s*(Algorithme)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.modifier.psc" },
-            "2": { "name": "entity.name.function.main.psc" }
+            "1": { "name": "storage.modifier" },
+            "2": { "name": "entity.name.function.main" }
           }
         }
       ]
     },
     "function-call": {
-      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)(?=\\s*\\()",
-      "captures": { "1": { "name": "entity.name.function.call.psc" } }
+      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin|et|ou|non)\\b)([a-zA-Z_][a-zA-Z0-9_]*)(?=\\s*\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.call" }
+      }
     },
-    "strings": { "name": "string.quoted.double.psc", "begin": "\"", "end": "\"" },
+    "strings": {
+      "name": "string.quoted.double",
+      "begin": "\"",
+      "end": "\""
+    },
     "chars": {
-      "name": "string.quoted.single.char.psc",
+      "name": "string.quoted.single.char",
       "match": "'(?:\\\\.|[^\\\\'])'"
     },
     "constants": {
       "patterns": [
-        { "name": "constant.numeric.psc", "match": "\\b\\d+(\\.\\d+)?\\b" },
-        { "name": "constant.language.boolean.psc", "match": "(?i)\\b(vrai|faux)\\b" },
-        { "name": "constant.language.psc", "match": "\\bFIN_LIGNE\\b" }
+        { "name": "constant.numeric", "match": "\\b\\d+(\\.\\d+)?\\b" },
+        {
+          "name": "constant.language.boolean",
+          "match": "(?i)\\b(vrai|faux)\\b"
+        },
+        { "name": "constant.language", "match": "\\bFIN_LIGNE\\b" }
       ]
     },
-    "operators": { "name": "keyword.operator.assignment.psc", "match": "(\\leftarrow|←|÷)" },
+    "operators-assignment": {
+      "name": "keyword.operator.assignment",
+      "match": "(←)"
+    },
+    "operators-arithmetic": {
+      "name": "keyword.operator.arithmetic",
+      "match": "(?i)(\\+|-|\\*|/|÷|\\b(mod|div)\\b)"
+    },
+    "operators-comparison": {
+      "name": "keyword.operator.comparison",
+      "match": "(<=|>=|!=|<>|=/|=|<|>|\\.\\.)"
+    },
     "variables": {
-      "name": "variable.other.psc",
-      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)?|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
+      "name": "variable.other",
+      "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
   }
 }

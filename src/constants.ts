@@ -5,16 +5,16 @@
 
 // Mots-clés du langage
 export const KEYWORDS = {
-    CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant'],
+    CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant', 'retourner', 'retourne'],
     BLOCKS: ['début', 'fin', 'algorithme', 'fonction'],
     TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste'],
     BOOLEAN: ['vrai', 'faux'],
     OPERATORS: ['et', 'ou', 'non', 'mod'],
-    IO: ['écrire', 'lire', 'retourner', 'retourne'],
+    IO: ['écrire', 'lire'],
     STRING_OPS: ['longueur', 'concat', 'souschaîne', 'ième'],
     FILE_OPS: ['fichierouvrir', 'fichierfermer', 'fichierlire', 'fichierfin', 'chaineversentier', 'fichiercreer', 'fichierecrire'],
     // Opérations TDA Liste (en minuscules)
-    LIST_OPS: ['tete','val','suc','finliste','listevide','ajoutteteliste','suppressionteteliste','ajoutqueueliste','suppressionqueueliste','ajoutliste','suppressionliste','changeliste'],
+    LIST_OPS: ['tete', 'val', 'suc', 'finliste', 'listevide', 'ajoutteteliste', 'suppressionteteliste', 'ajoutqueueliste', 'suppressionqueueliste', 'ajoutliste', 'suppressionliste', 'changeliste'],
     MODIFIERS: ['inout']
 } as const;
 
