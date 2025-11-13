@@ -25,7 +25,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
         const declarationMatch = PATTERNS.VARIABLE_DECLARATION.exec(trimmedLine);
         if (declarationMatch && !PATTERNS.FUNCTION_DECLARATION.test(trimmedLine)) {
             const rawType = declarationMatch[2];
-            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(rawType)
+            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste)$/i.test(rawType)
                 ? normalizeType(rawType)
                 : rawType;
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
@@ -66,7 +66,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
                     const typeMatch = rawTypeName.match(/^([\p{L}0-9_]+)/iu);
                     if (typeMatch) {
                         const typeName = typeMatch[1];
-                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau)$/i.test(typeName)
+                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste)$/i.test(typeName)
                             ? normalizeType(typeName)
                             : typeName;
                         if (varName) variableTypes.set(varName, finalType);
@@ -118,9 +118,48 @@ function transpileToLua(pscCode: string): string {
         }
         if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
 
-        // Ignorer les déclarations de types composites et tableaux
+        // Ignorer les déclarations de types composites
         if (PATTERNS.COMPOSITE_TYPE.test(trimmedLine)) continue;
-        if (/^[\p{L}_][\p{L}0-9_]*\s*=\s*tableau/iu.test(trimmedLine)) continue;
+
+        // Transformer les déclarations de tableaux en initialisation Lua
+        const arrayDecl = /^\s*([\p{L}_][\p{L}0-9_]*)\s*(?:=|←)\s*tableau\s+[\p{L}_][\p{L}0-9_]*\s*\[([^\]]+)\]\s*$/iu.exec(trimmedLine);
+        if (arrayDecl) {
+            const varName = arrayDecl[1];
+            const dimsStr = arrayDecl[2];
+            const dims = smartSplitArgs(dimsStr);
+            const ranges = dims.map(d => {
+                const m = d.match(/^\s*(.+?)\s*\.\.\s*(.+)\s*$/);
+                if (m) return { lo: m[1].trim(), hi: m[2].trim() };
+                // Si le format est inattendu, fallback sur 1..n
+                return { lo: '0', hi: d.trim() };
+            });
+
+            const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+            let block = `${indentation}${varName} = {}` + '\n';
+
+            // Créer des boucles pour dimensions-1 pour instancier les sous-tables
+            if (ranges.length >= 2) {
+                let path = varName;
+                let innerIndent = indentation;
+                for (let idx = 0; idx < ranges.length - 1; idx++) {
+                    const it = `__i${idx+1}`;
+                    const start = `((${ranges[idx].lo})) + 1`;
+                    const finish = `((${ranges[idx].hi})) + 1`;
+                    block += `${innerIndent}for ${it} = ${start}, ${finish}, 1 do` + '\n';
+                    innerIndent += '\t';
+                    block += `${innerIndent}${path}[${it}] = {}` + '\n';
+                    path += `[${it}]`;
+                }
+                // Fermer les boucles
+                for (let idx = 0; idx < ranges.length - 1; idx++) {
+                    innerIndent = indentation + '\t'.repeat(ranges.length - 1 - 1 - idx);
+                    block += `${innerIndent}end` + '\n';
+                }
+            }
+
+            luaCode += block;
+            continue;
+        }
 
         if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
             const isFunctionEnd = functionStack.length > 0 && /^\s*Fin\b/i.test(trimmedLine);
@@ -277,14 +316,20 @@ function transpileToLua(pscCode: string): string {
                 });
 
                 if (!handledCondition) {
+                    const isReturnLine = /^\s*return\b/i.test(trimmedLine);
                     const parts = trimmedLine.split(/(__PSC_TABLE_START__|__PSC_TABLE_END__)/g);
                     for (let i = 0; i < parts.length; i += 4) {
-                        // Protéger les affectations générées (ex: l = __psc_liste_...)
-                        parts[i] = parts[i].replace(/(\s)=(\s)/g, '$1__PSC_ASSIGN__$2');
-                        // Convertir les comparaisons '=' en '==' (sans lookbehind)
-                        parts[i] = parts[i].replace(/([^<>=~])=(?!=)/g, '$1==');
-                        // Restaurer les affectations
-                        parts[i] = parts[i].replace(/__PSC_ASSIGN__/g, '=');
+                        if (isReturnLine) {
+                            // Dans une expression de retour, '=' est toujours une comparaison
+                            parts[i] = parts[i].replace(/([^<>=~])=(?!=)/g, '$1==');
+                        } else {
+                            // Protéger les affectations générées (ex: l = __psc_liste_...)
+                            parts[i] = parts[i].replace(/(\s)=(\s)/g, '$1__PSC_ASSIGN__$2');
+                            // Convertir les comparaisons '=' en '==' (sans lookbehind)
+                            parts[i] = parts[i].replace(/([^<>=~])=(?!=)/g, '$1==');
+                            // Restaurer les affectations
+                            parts[i] = parts[i].replace(/__PSC_ASSIGN__/g, '=');
+                        }
                     }
                     trimmedLine = parts.join('');
                 }
@@ -297,12 +342,38 @@ function transpileToLua(pscCode: string): string {
             // Nettoyer les marqueurs de table
             trimmedLine = trimmedLine.replace(/__PSC_TABLE_START__/g, '').replace(/__PSC_TABLE_END__/g, '');
 
-            trimmedLine = trimmedLine.replace(/(?<![\p{L}0-9_])\[([^\]]*)\]/gu, '{$1}');
-            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\[([^\]]+)\]/gu, (match, varName, indicesString) => {
-                const indices = indicesString.split(',');
-                const transformedIndices = indices.map((index: string) => `(${(index || '').trim()}) + 1`);
-                return `${varName}[${transformedIndices.join('][')}]`;
+            // 0) Étendre les indices séparés par des virgules: a[i, j] -> a[i][j]
+            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\s*\[([^\]]+)\]/gu, (m, name, inside) => {
+                const indices = smartSplitArgs(inside);
+                if (indices.length > 1) {
+                    return name + indices.map(id => `[${id}]`).join('');
+                }
+                return m;
             });
+
+            // 1) Convertir les accès multidimensionnels: a[i][j] -> a[(i)+1][(j)+1]
+            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\s*((?:\[[^\]]+\])+)/gu, (m, name, brackets) => {
+                const parts: string[] = [];
+                const re = /\[([^\]]+)\]/g;
+                let mm: RegExpExecArray | null;
+                while ((mm = re.exec(brackets)) !== null) {
+                    const expr = (mm[1] || '').trim();
+                    const indices = smartSplitArgs(expr);
+                    if (indices.length > 1) {
+                        for (const idx of indices) {
+                            const id = (idx || '').trim();
+                            if (id) parts.push(`[(${id}) + 1]`);
+                        }
+                    } else {
+                        parts.push(`[(${expr}) + 1]`);
+                    }
+                }
+                return name + parts.join('');
+            });
+
+            // 2) Convertir uniquement les littéraux de tableaux: [1,2] -> {1,2}
+            //    Ne pas convertir les index résiduels comme "][p]" : restriction sur le caractère précédent
+            trimmedLine = trimmedLine.replace(/(?:(?<=^)|(?<=[\s=,(;:]))\[([^\]]*)\]/gu, '{$1}');
         }
 
         if (trimmedLine.match(/^écrire\(/i)) {
