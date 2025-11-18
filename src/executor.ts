@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { PATTERNS, LUA_REPLACEMENTS, FUNCTION_MAPPING, LUA_HELPERS } from './constants';
-import { normalizeType, smartSplitArgs } from './utils';
+import { normalizeType, smartSplitArgs, findMatchingParen } from './utils';
 import { FunctionRegistry } from './functionRegistry';
 import { CompositeTypeRegistry } from './compositeTypes';
 
@@ -78,7 +78,6 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
     return variableTypes;
 }
 
-
 /**
  * Transpile le code Pseudo-Code en code Lua exécutable.
  * @param pscCode Le code source en Pseudo-Code.
@@ -98,6 +97,91 @@ export function transpileToLua(pscCode: string): string {
     const lines = cleanedCode.split('\n');
     let isInsideAlgorithmBlock = false;
     const functionStack: any[] = [];
+
+    // Convertit des parenthèses non appel de fonction en littéraux de liste: (x, y) -> __psc_liste_from_table({x, y})
+    const transformParenListLiterals = (input: string): string => {
+        const isIdent = (ch: string) => /[\p{L}0-9_]/u.test(ch);
+        const allowedPrev = (ch: string | undefined) => {
+            if (!ch) return true; // début de ligne
+            return /[\s=,(;:\[]/.test(ch);
+        };
+        const isDisallowedPrevWord = (prefix: string): boolean => {
+            const m = prefix.match(/([\p{L}_][\p{L}0-9_]*)\s*$/u);
+            const w = m ? m[1].toLowerCase() : '';
+            return new Set(['if','elseif','while','for','return','function','local','not','then','do','else']).has(w);
+        };
+        const hasTopLevelComma = (s: string): boolean => smartSplitArgs(s).length > 1;
+        const isSimpleAtom = (s: string): boolean => {
+            const t = s.trim();
+            if (!t) return false;
+            if (/^"[\s\S]*"$/.test(t) || /^'(?:\\.|[^\\'])*'$/.test(t)) return true;
+
+            if (/^\d+(?:[.,]\d+)?$/.test(t)) return true;
+            if (/^[\p{L}_][\p{L}0-9_]*$/u.test(t)) return true;
+            // déjà transformé récursivement
+            if (/^__psc_liste_from_table\s*\(/.test(t)) return true;
+            if (/^\{[\s\S]*\}$/.test(t)) return true; // table Lua
+            return false;
+        };
+
+        const process = (str: string): string => {
+            let i = 0;
+            let out = '';
+            while (i < str.length) {
+                const ch = str[i];
+                if (ch === '(') {
+                    const prev = i > 0 ? str[i - 1] : undefined;
+                    // Si précédé d'un identifiant, c'est un appel de fonction, on ne touche pas
+                    if (prev && isIdent(prev)) {
+                        out += ch;
+                        i++;
+                        continue;
+                    }
+                    if (!allowedPrev(prev)) {
+                        out += ch;
+                        i++;
+                        continue;
+                    }
+                    // Éviter après mots-clés de contrôle/flux (if, while, ...)
+                    if (isDisallowedPrevWord(str.slice(0, i))) {
+                        const closeSkip = findMatchingParen(str, i);
+                        if (closeSkip !== -1) {
+                            out += '(' + process(str.slice(i + 1, closeSkip)) + ')';
+                            i = closeSkip + 1;
+                            continue;
+                        }
+                    }
+                    const close = findMatchingParen(str, i);
+                    if (close === -1) {
+                        out += ch;
+                        i++;
+                        continue;
+                    }
+
+                    const insideRaw = str.slice(i + 1, close);
+                    // Traiter récursivement l'intérieur d'abord (pour listes imbriquées)
+                    const inside = process(insideRaw);
+                    const args = smartSplitArgs(inside);
+                    const shouldTransform = args.length > 1 || (args.length === 1 && isSimpleAtom(args[0]));
+                    if (shouldTransform) {
+                        out += `__psc_liste_from_table({${args.join(', ')}})`;
+                        i = close + 1;
+                        continue;
+                    } else {
+                        // Ne pas transformer (groupe arithmétique, etc.)
+                        out += '(' + inside + ')';
+                        i = close + 1;
+                        continue;
+                    }
+                }
+                out += ch;
+                i++;
+            }
+            return out;
+        };
+
+        return process(input);
+    };
 
     for (const line of lines) {
         const originalLineForIndentation = line;
@@ -242,6 +326,9 @@ export function transpileToLua(pscCode: string): string {
 
             // Transformer les constructeurs et littéraux de types composites
             trimmedLine = compositeTypeRegistry.transform(trimmedLine);
+
+            // Transformer les littéraux de liste entre parenthèses en appels helper
+            trimmedLine = transformParenListLiterals(trimmedLine);
 
             // Appliquer le mapping des fonctions PSC -> helpers Lua (incluant TDA Liste)
             for (const [pscName, helperName] of Object.entries(FUNCTION_MAPPING)) {

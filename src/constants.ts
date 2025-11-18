@@ -239,9 +239,23 @@ local function __psc_is_array(t)
     return count == i
 end
 
+-- Détection d'une liste chaînée TDA (nœud avec champs 'val' et/ou 'suc')
+local function __psc_is_liste(t)
+    return type(t) == 'table' and (t.val ~= nil or t.suc ~= nil)
+end
+
+-- Sérialisation générique (incluant listes TDA au format (a, b, c))
 local function __psc_serialize(v)
     if type(v) == 'table' then
-        if __psc_is_array(v) then
+        if __psc_is_liste(v) then
+            local parts = {}
+            local node = v
+            while node ~= nil do
+                parts[#parts+1] = __psc_serialize(node.val)
+                node = node.suc
+            end
+            return '(' .. table.concat(parts, ', ') .. ')'
+        elseif __psc_is_array(v) then
             local parts = {}
             for i = 1, #v do
                 parts[#parts+1] = __psc_serialize(v[i])
@@ -376,6 +390,16 @@ local function __psc_liste_change(l, p, v)
     end
     if node ~= nil then
         node.val = v
+    end
+    return l
+end
+
+-- Construit une liste chaînée à partir d'un tableau Lua séquentiel
+local function __psc_liste_from_table(t)
+    local l = __psc_liste_vide()
+    if type(t) ~= 'table' then return l end
+    for i = 1, #t do
+        l = __psc_liste_ajout_queue(l, t[i])
     end
     return l
 end
