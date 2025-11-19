@@ -7,7 +7,7 @@
 export const KEYWORDS = {
     CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant', 'retourner', 'retourne'],
     BLOCKS: ['début', 'fin', 'algorithme', 'fonction'],
-    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste'],
+    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste', 'pile', 'file'],
     BOOLEAN: ['vrai', 'faux'],
     OPERATORS: ['et', 'ou', 'non', 'mod'],
     IO: ['écrire', 'lire'],
@@ -15,6 +15,10 @@ export const KEYWORDS = {
     FILE_OPS: ['fichierouvrir', 'fichierfermer', 'fichierlire', 'fichierfin', 'chaineversentier', 'fichiercreer', 'fichierecrire'],
     // Opérations TDA Liste (en minuscules)
     LIST_OPS: ['tete', 'val', 'suc', 'finliste', 'listevide', 'ajoutteteliste', 'suppressionteteliste', 'ajoutqueueliste', 'suppressionqueueliste', 'ajoutliste', 'suppressionliste', 'changeliste'],
+    // Opérations TDA Pile
+    STACK_OPS: ['pilevide', 'sommet', 'estvidepile', 'empiler', 'depiler'],
+    // Opérations TDA File
+    QUEUE_OPS: ['filevide', 'tete', 'estvidefile', 'enfiler', 'defiler'],
     MODIFIERS: ['inout']
 } as const;
 
@@ -33,7 +37,18 @@ export const BUILTIN_FUNCTION_ARITY: Record<string, number> = {
     'suppressionqueueliste': 1,
     'ajoutliste': 3,
     'suppressionliste': 2,
-    'changeliste': 3
+    'changeliste': 3,
+    // TDA Pile
+    'pilevide': 0,
+    'sommet': 1,
+    'estvidepile': 1,
+    'empiler': 2,
+    'depiler': 1,
+    // TDA File
+    'filevide': 0,
+    'estvidefile': 1,
+    'enfiler': 2,
+    'defiler': 1
 };
 
 // Tous les identifiants connus (pour le linter)
@@ -47,6 +62,8 @@ export const KNOWN_IDENTIFIERS = new Set([
     ...KEYWORDS.STRING_OPS,
     ...KEYWORDS.FILE_OPS,
     ...KEYWORDS.LIST_OPS,
+    ...KEYWORDS.STACK_OPS,
+    ...KEYWORDS.QUEUE_OPS,
     ...KEYWORDS.MODIFIERS,
     'lexique', 'fin_ligne'
 ]);
@@ -118,7 +135,9 @@ export const TYPE_MAPPING: Record<string, string> = {
     'caractère': 'caractère',
     'caractere': 'caractère',
     'tableau': 'tableau',
-    'liste': 'liste'
+    'liste': 'liste',
+    'pile': 'pile',
+    'file': 'file'
 };
 
 // Remplacements de symboles pour Lua
@@ -157,7 +176,7 @@ export const FUNCTION_MAPPING: Record<string, string> = {
     'fichierEcrire': '__psc_fichierEcrire',
     'écrire': '__psc_write',
     // TDA Liste (places entières)
-    'tete': '__psc_liste_tete',
+    'tete': '__psc_generic_tete',
     'val': '__psc_liste_val',
     'suc': '__psc_liste_suc',
     'finListe': '__psc_liste_fin',
@@ -168,7 +187,18 @@ export const FUNCTION_MAPPING: Record<string, string> = {
     'suppressionQueueListe': '__psc_liste_suppression_queue',
     'ajoutListe': '__psc_liste_ajout',
     'suppressionListe': '__psc_liste_suppression',
-    'changeListe': '__psc_liste_change'
+    'changeListe': '__psc_liste_change',
+    // TDA Pile
+    'pileVide': '__psc_pile_vide',
+    'sommet': '__psc_pile_sommet',
+    'estVidePile': '__psc_pile_est_vide',
+    'empiler': '__psc_pile_empiler',
+    'depiler': '__psc_pile_depiler',
+    // TDA File
+    'fileVide': '__psc_file_vide',
+    'estVideFile': '__psc_file_est_vide',
+    'enfiler': '__psc_file_enfiler',
+    'defiler': '__psc_file_defiler'
 } as const;
 
 // Helpers Lua
@@ -402,6 +432,68 @@ local function __psc_liste_from_table(t)
         l = __psc_liste_ajout_queue(l, t[i])
     end
     return l
+end
+
+-- =================================================================================================================
+-- TDA Pile (Implémentation par table/tableau)
+-- =================================================================================================================
+local function __psc_pile_vide()
+    return {}
+end
+
+local function __psc_pile_sommet(p)
+    if type(p) ~= 'table' or #p == 0 then return nil end
+    return p[#p]
+end
+
+local function __psc_pile_est_vide(p)
+    return type(p) ~= 'table' or #p == 0
+end
+
+local function __psc_pile_empiler(p, v)
+    if type(p) == 'table' then
+        table.insert(p, v)
+    end
+end
+
+local function __psc_pile_depiler(p)
+    if type(p) == 'table' and #p > 0 then
+        table.remove(p)
+    end
+end
+
+-- =================================================================================================================
+-- TDA File (Implémentation par table/tableau)
+-- =================================================================================================================
+local function __psc_file_vide()
+    return {}
+end
+
+local function __psc_file_est_vide(f)
+    return type(f) ~= 'table' or #f == 0
+end
+
+local function __psc_file_enfiler(f, v)
+    if type(f) == 'table' then
+        table.insert(f, v)
+    end
+end
+
+local function __psc_file_defiler(f)
+    if type(f) == 'table' and #f > 0 then
+        table.remove(f, 1)
+    end
+end
+
+-- Fonction générique pour 'tete' (supporte Liste et File)
+local function __psc_generic_tete(obj)
+    if __psc_is_liste(obj) then
+        return __psc_liste_tete(obj)
+    elseif type(obj) == 'table' then
+        -- Pour une file (ou tableau), la tête est le premier élément
+        return obj[1]
+    end
+    return nil
 end
 
 -- =================================================================================================================
