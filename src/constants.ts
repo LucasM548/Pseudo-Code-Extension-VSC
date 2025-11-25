@@ -221,7 +221,20 @@ local function __psc_serialize(v)
     end
     
     if type(v) == 'table' then
-        if __psc_is_liste(v) then
+        -- Vérifier d'abord si c'est une Pile ou File (avec métadonnée _type)
+        if v._type == 'pile' then
+            local parts = {}
+            for i = 1, #v do
+                parts[#parts+1] = __psc_serialize(v[i])
+            end
+            return 'Pile[' .. table.concat(parts, ', ') .. ']'
+        elseif v._type == 'file' then
+            local parts = {}
+            for i = 1, #v do
+                parts[#parts+1] = __psc_serialize(v[i])
+            end
+            return 'File[' .. table.concat(parts, ', ') .. ']'
+        elseif __psc_is_liste(v) then
             local parts = {}
             local node = v
             while node ~= nil do
@@ -243,18 +256,19 @@ local function __psc_serialize(v)
             -- Si c'est un noeud isolé, on l'affiche simplement
             return '{val=' .. tostring(v.val) .. '}'
         elseif __psc_is_array(v) then
-            -- Détection de pile ou file basée sur des métadonnées (optionnel)
-            -- Pour l'instant, on affiche simplement les tableaux avec [...]
+            -- Tableau normal
             local parts = {}
             for i = 1, #v do
                 parts[#parts+1] = __psc_serialize(v[i])
             end
             return '[' .. table.concat(parts, ', ') .. ']'
         else
-            -- Objet/enregistrement générique
+            -- Objet/enregistrement générique (filtrer _type interne)
             local parts = {}
             for k, val in pairs(v) do
-                parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
+                if k ~= '_type' then
+                    parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
+                end
             end
             return '{' .. table.concat(parts, ', ') .. '}'
         end
@@ -400,7 +414,7 @@ end
 -- TDA Pile (Implémentation par table/tableau)
 -- =================================================================================================================
 local function __psc_pile_vide()
-    return {}
+    return {_type = 'pile'}
 end
 
 local function __psc_pile_sommet(p)
@@ -424,11 +438,22 @@ local function __psc_pile_depiler(p)
     end
 end
 
+-- Créer une pile à partir d'un tableau de valeurs
+local function __psc_pile_from_values(t)
+    local p = __psc_pile_vide()
+    if type(t) == 'table' then
+        for i = 1, #t do
+            __psc_pile_empiler(p, t[i])
+        end
+    end
+    return p
+end
+
 -- =================================================================================================================
 -- TDA File (Implémentation par table/tableau)
 -- =================================================================================================================
 local function __psc_file_vide()
-    return {}
+    return {_type = 'file'}
 end
 
 local function __psc_file_est_vide(f)
@@ -445,6 +470,17 @@ local function __psc_file_defiler(f)
     if type(f) == 'table' and #f > 0 then
         table.remove(f, 1)
     end
+end
+
+-- Créer une file à partir d'un tableau de valeurs
+local function __psc_file_from_values(t)
+    local f = __psc_file_vide()
+    if type(t) == 'table' then
+        for i = 1, #t do
+            __psc_file_enfiler(f, t[i])
+        end
+    end
+    return f
 end
 
 -- Fonction générique pour 'tete' (supporte Liste et File)
@@ -571,6 +607,16 @@ local function __psc_file_premier(f)
         return f[1]
     end
     return nil
+end
+
+-- Construit une ListeSym à partir d'un tableau Lua séquentiel
+local function __psc_listesym_from_table(t)
+    local l = __psc_listesym_vide()
+    if type(t) ~= 'table' then return l end
+    for i = 1, #t do
+        __psc_listesym_ajout_queue(l, t[i])
+    end
+    return l
 end
 
 -- =================================================================================================================

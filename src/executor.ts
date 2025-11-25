@@ -339,6 +339,45 @@ export function transpileToLua(pscCode: string): string {
             // Transformer les littéraux de liste entre parenthèses en appels helper
             trimmedLine = transformParenListLiterals(trimmedLine);
 
+            // ========== FONCTIONS CONSTRUCTEURS POUR TYPES DE DONNÉES ==========
+            // Syntaxes explicites pour créer chaque type de structure
+
+            // 1. liste(a, b, c) → __psc_liste_from_table({a, b, c})
+            trimmedLine = trimmedLine.replace(/\bliste\s*\(([^)]*)\)/gi, (match, args) => {
+                const closePos = findMatchingParen(match, match.indexOf('('));
+                if (closePos !== -1) {
+                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
+                    return `__psc_liste_from_table({${innerArgs}})`;
+                }
+                return `__psc_liste_from_table({${args}})`;
+            });
+
+            // 2. listeSym(a, b, c) → __psc_listesym_from_table({a, b, c})
+            trimmedLine = trimmedLine.replace(/\blisteSym\s*\(([^)]*)\)/gi, (match, args) => {
+                const closePos = findMatchingParen(match, match.indexOf('('));
+                if (closePos !== -1) {
+                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
+                    return `__psc_listesym_from_table({${innerArgs}})`;
+                }
+                return `__psc_listesym_from_table({${args}})`;
+            });
+
+            // 3. pile(a, b, c) → pile avec éléments initiaux
+            trimmedLine = trimmedLine.replace(/\bpile\s*\(([^)]*)\)/gi, (match, args) => {
+                if (args.trim() === '') {
+                    return '__psc_pile_vide()';
+                }
+                return `__psc_pile_from_values({${args}})`;
+            });
+
+            // 4. file(a, b, c) → file avec éléments initiaux
+            trimmedLine = trimmedLine.replace(/\bfile\s*\(([^)]*)\)/gi, (match, args) => {
+                if (args.trim() === '') {
+                    return '__psc_file_vide()';
+                }
+                return `__psc_file_from_values({${args}})`;
+            });
+
             // ========== TRAITEMENT SPÉCIAL DES FONCTIONS DE CHAÎNES ==========
             // Ces fonctions ne se mappent pas directement à des fonctions Lua
 
