@@ -55,7 +55,7 @@
     },
     "support-functions": {
       "name": "support.function",
-      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier|fichierCreer|fichierEcrire)\\b"
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier|fichierCreer|fichierEcrire|tete|val|suc|finliste|listevide|ajoutteteliste|suppressionteteliste|ajoutqueueliste|suppressionqueueliste|ajoutliste|suppressionliste|changeliste|pilevide|sommet|estvidepile|empiler|depiler|filevide|estvidefile|enfiler|defiler|premier|ajoutfile|suppressionfile|estfilevide|tetels|queuels|valls|sucls|precls|finls|videls|ajouttetels|suppressiontetels|ajoutqueuels|suppressionqueuels|ajoutls|suppressionls|changels)\\b"
     },
     "storage": {
       "patterns": [
@@ -67,7 +67,7 @@
         },
         {
           "name": "storage.type",
-          "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|Booleen|InOut)\\b(?!\\s*\\()"
+          "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym|Booleen|InOut)\\b(?!\\s*\\()"
         },
         {
           "name": "storage.type",

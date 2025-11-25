@@ -25,7 +25,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
         const declarationMatch = PATTERNS.VARIABLE_DECLARATION.exec(trimmedLine);
         if (declarationMatch && !PATTERNS.FUNCTION_DECLARATION.test(trimmedLine)) {
             const rawType = declarationMatch[2];
-            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file)$/i.test(rawType)
+            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym)$/i.test(rawType)
                 ? normalizeType(rawType)
                 : rawType;
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
@@ -66,7 +66,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
                     const typeMatch = rawTypeName.match(/^([\p{L}0-9_]+)/iu);
                     if (typeMatch) {
                         const typeName = typeMatch[1];
-                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file)$/i.test(typeName)
+                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym)$/i.test(typeName)
                             ? normalizeType(typeName)
                             : typeName;
                         if (varName) variableTypes.set(varName, finalType);

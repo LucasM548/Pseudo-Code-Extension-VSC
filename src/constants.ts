@@ -7,7 +7,7 @@
 export const KEYWORDS = {
     CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant', 'retourner', 'retourne'],
     BLOCKS: ['début', 'fin', 'algorithme', 'fonction'],
-    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste', 'pile', 'file'],
+    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste', 'pile', 'file', 'listesym'],
     BOOLEAN: ['vrai', 'faux'],
     OPERATORS: ['et', 'ou', 'non', 'mod'],
     IO: ['écrire', 'lire'],
@@ -15,10 +15,12 @@ export const KEYWORDS = {
     FILE_OPS: ['fichierouvrir', 'fichierfermer', 'fichierlire', 'fichierfin', 'chaineversentier', 'fichiercreer', 'fichierecrire'],
     // Opérations TDA Liste (en minuscules)
     LIST_OPS: ['tete', 'val', 'suc', 'finliste', 'listevide', 'ajoutteteliste', 'suppressionteteliste', 'ajoutqueueliste', 'suppressionqueueliste', 'ajoutliste', 'suppressionliste', 'changeliste'],
+    // Opérations TDA ListeSym
+    LISTESYM_OPS: ['tetels', 'queuels', 'valls', 'sucls', 'precls', 'finls', 'videls', 'ajouttetels', 'suppressiontetels', 'ajoutqueuels', 'suppressionqueuels', 'ajoutls', 'suppressionls', 'changels'],
     // Opérations TDA Pile
     STACK_OPS: ['pilevide', 'sommet', 'estvidepile', 'empiler', 'depiler'],
     // Opérations TDA File
-    QUEUE_OPS: ['filevide', 'tete', 'estvidefile', 'enfiler', 'defiler'],
+    QUEUE_OPS: ['filevide', 'tete', 'estvidefile', 'enfiler', 'defiler', 'premier', 'ajoutfile', 'suppressionfile', 'estfilevide'],
     MODIFIERS: ['inout']
 } as const;
 
@@ -48,7 +50,26 @@ export const BUILTIN_FUNCTION_ARITY: Record<string, number> = {
     'filevide': 0,
     'estvidefile': 1,
     'enfiler': 2,
-    'defiler': 1
+    'defiler': 1,
+    'premier': 1,
+    'ajoutfile': 2,
+    'suppressionfile': 1,
+    'estfilevide': 1,
+    // TDA ListeSym
+    'tetels': 1,
+    'queuels': 1,
+    'valls': 2,
+    'sucls': 2,
+    'precls': 2,
+    'finls': 2,
+    'videls': 0,
+    'ajouttetels': 2,
+    'suppressiontetels': 1,
+    'ajoutqueuels': 2,
+    'suppressionqueuels': 1,
+    'ajoutls': 3,
+    'suppressionls': 2,
+    'changels': 3
 };
 
 // Tous les identifiants connus (pour le linter)
@@ -64,6 +85,7 @@ export const KNOWN_IDENTIFIERS = new Set([
     ...KEYWORDS.LIST_OPS,
     ...KEYWORDS.STACK_OPS,
     ...KEYWORDS.QUEUE_OPS,
+    ...KEYWORDS.LISTESYM_OPS,
     ...KEYWORDS.MODIFIERS,
     'lexique', 'fin_ligne'
 ]);
@@ -137,7 +159,8 @@ export const TYPE_MAPPING: Record<string, string> = {
     'tableau': 'tableau',
     'liste': 'liste',
     'pile': 'pile',
-    'file': 'file'
+    'file': 'file',
+    'listesym': 'listesym'
 };
 
 // Remplacements de symboles pour Lua
@@ -198,7 +221,26 @@ export const FUNCTION_MAPPING: Record<string, string> = {
     'fileVide': '__psc_file_vide',
     'estVideFile': '__psc_file_est_vide',
     'enfiler': '__psc_file_enfiler',
-    'defiler': '__psc_file_defiler'
+    'defiler': '__psc_file_defiler',
+    'premier': '__psc_file_premier',
+    'ajoutFile': '__psc_file_enfiler',
+    'suppressionFile': '__psc_file_defiler',
+    'estFileVide': '__psc_file_est_vide',
+    // TDA ListeSym
+    'teteLS': '__psc_listesym_tete',
+    'queueLS': '__psc_listesym_queue',
+    'valLS': '__psc_listesym_val',
+    'sucLS': '__psc_listesym_suc',
+    'precLS': '__psc_listesym_prec',
+    'finLS': '__psc_listesym_fin',
+    'videLS': '__psc_listesym_vide',
+    'ajoutTeteLS': '__psc_listesym_ajout_tete',
+    'suppressionTeteLS': '__psc_listesym_suppression_tete',
+    'ajoutQueueLS': '__psc_listesym_ajout_queue',
+    'suppressionQueueLS': '__psc_listesym_suppression_queue',
+    'ajoutLS': '__psc_listesym_ajout',
+    'suppressionLS': '__psc_listesym_suppression',
+    'changeLS': '__psc_listesym_change'
 } as const;
 
 // Helpers Lua
@@ -274,6 +316,15 @@ local function __psc_is_liste(t)
     return type(t) == 'table' and (t.val ~= nil or t.suc ~= nil)
 end
 
+-- Détection d'une liste symétrique TDA (table avec head/tail ou noeud avec val/suc/prec)
+local function __psc_is_listesym(t)
+    -- Structure conteneur { head = ..., tail = ... }
+    if type(t) == 'table' and (t.head ~= nil or t.tail ~= nil) then return true end
+    -- Noeud { val=..., suc=..., prec=... }
+    if type(t) == 'table' and (t.val ~= nil and (t.suc ~= nil or t.prec ~= nil)) then return true end
+    return false
+end
+
 -- Sérialisation générique (incluant listes TDA au format (a, b, c))
 local function __psc_serialize(v)
     if type(v) == 'table' then
@@ -285,6 +336,19 @@ local function __psc_serialize(v)
                 node = node.suc
             end
             return '(' .. table.concat(parts, ', ') .. ')'
+        elseif __psc_is_listesym(v) then
+            -- Si c'est le conteneur {head=..., tail=...}
+            if v.head ~= nil or v.tail ~= nil then
+                local parts = {}
+                local node = v.head
+                while node ~= nil do
+                    parts[#parts+1] = __psc_serialize(node.val)
+                    node = node.suc
+                end
+                return 'LS(' .. table.concat(parts, ', ') .. ')'
+            end
+            -- Si c'est un noeud isolé, on l'affiche simplement
+            return '{val=' .. tostring(v.val) .. '}'
         elseif __psc_is_array(v) then
             local parts = {}
             for i = 1, #v do
@@ -492,6 +556,121 @@ local function __psc_generic_tete(obj)
     elseif type(obj) == 'table' then
         -- Pour une file (ou tableau), la tête est le premier élément
         return obj[1]
+    end
+    return nil
+end
+
+-- =================================================================================================================
+-- TDA ListeSym (Liste Symétrique)
+-- =================================================================================================================
+local function __psc_listesym_vide()
+    return { head = nil, tail = nil }
+end
+
+local function __psc_listesym_tete(l)
+    return l.head
+end
+
+local function __psc_listesym_queue(l)
+    return l.tail
+end
+
+local function __psc_listesym_val(l, p)
+    if p then return p.val end
+    return nil
+end
+
+local function __psc_listesym_suc(l, p)
+    if p then return p.suc end
+    return nil
+end
+
+local function __psc_listesym_prec(l, p)
+    if p then return p.prec end
+    return nil
+end
+
+local function __psc_listesym_fin(l, p)
+    return p == nil
+end
+
+local function __psc_listesym_ajout_tete(l, v)
+    local new_node = { val = v, suc = l.head, prec = nil }
+    if l.head then
+        l.head.prec = new_node
+    else
+        l.tail = new_node
+    end
+    l.head = new_node
+end
+
+local function __psc_listesym_suppression_tete(l)
+    if l.head then
+        l.head = l.head.suc
+        if l.head then
+            l.head.prec = nil
+        else
+            l.tail = nil
+        end
+    end
+end
+
+local function __psc_listesym_ajout_queue(l, v)
+    local new_node = { val = v, suc = nil, prec = l.tail }
+    if l.tail then
+        l.tail.suc = new_node
+    else
+        l.head = new_node
+    end
+    l.tail = new_node
+end
+
+local function __psc_listesym_suppression_queue(l)
+    if l.tail then
+        l.tail = l.tail.prec
+        if l.tail then
+            l.tail.suc = nil
+        else
+            l.head = nil
+        end
+    end
+end
+
+local function __psc_listesym_ajout(l, p, v)
+    if p == nil then
+        __psc_listesym_ajout_queue(l, v)
+    else
+        local new_node = { val = v, suc = p, prec = p.prec }
+        if p.prec then
+            p.prec.suc = new_node
+        else
+            l.head = new_node
+        end
+        p.prec = new_node
+    end
+end
+
+local function __psc_listesym_suppression(l, p)
+    if p == nil then return end
+    if p.prec then
+        p.prec.suc = p.suc
+    else
+        l.head = p.suc
+    end
+    if p.suc then
+        p.suc.prec = p.prec
+    else
+        l.tail = p.prec
+    end
+end
+
+local function __psc_listesym_change(l, p, v)
+    if p then p.val = v end
+end
+
+local function __psc_file_premier(f)
+    if type(f) == 'table' and #f > 0 then
+        return f[1]
     end
     return nil
 end
