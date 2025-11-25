@@ -2,7 +2,7 @@
  * Transpileur Pseudo-Code vers Lua
  */
 
-import * as vscode from 'vscode';
+
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -93,12 +93,7 @@ export function transpileToLua(pscCode: string): string {
 
     const variableTypes = collectVariableTypes(pscCode);
 
-    // Nettoyer les commentaires blocs avant de traiter le code
-    // On remplace les commentaires blocs par des lignes vides pour préserver les numéros de lignes
-    let cleanedCode = pscCode.replace(/\/\*[\s\S]*?\*\//g, '');
-    // Supprimer aussi le bloc Lexique
-    cleanedCode = cleanedCode.replace(/Lexique\s*:?[\s\S]*?(?=\n\s*(?:Début|Fonction|Algorithme|$))/i, '');
-
+    let cleanedCode = pscCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/Lexique\s*:?[\s\S]*/i, '');
     let luaCode = '';
     const lines = cleanedCode.split('\n');
     let isInsideAlgorithmBlock = false;
@@ -201,15 +196,12 @@ export function transpileToLua(pscCode: string): string {
         let trimmedLine = textToProcess.trim();
         let lineIsFullyProcessed = false;
 
-        // Ignorer les lignes vides et les lignes qui ne contiennent que des caractères de ponctuation résiduels
-        if (trimmedLine === '' || /^[\/\*\s]*$/.test(trimmedLine)) continue;
-
         if (/^\s*algorithme\b/i.test(trimmedLine)) { isInsideAlgorithmBlock = true; continue; }
         if (isInsideAlgorithmBlock) {
             if (/^\s*Fin\b/i.test(trimmedLine)) isInsideAlgorithmBlock = false;
             continue;
         }
-        if (/^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
+        if (trimmedLine === '' || /^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
 
         // Ignorer les déclarations de types composites
         if (PATTERNS.COMPOSITE_TYPE.test(trimmedLine)) continue;
@@ -339,96 +331,11 @@ export function transpileToLua(pscCode: string): string {
             // Transformer les littéraux de liste entre parenthèses en appels helper
             trimmedLine = transformParenListLiterals(trimmedLine);
 
-            // ========== TRAITEMENT SPÉCIAL DES FONCTIONS DE CHAÎNES ==========
-            // Ces fonctions ne se mappent pas directement à des fonctions Lua
-
-            // 1. longueur(x) -> #x
-            trimmedLine = trimmedLine.replace(/\blongueur\s*\(([^)]+)\)/gi, (match, arg) => {
-                const cleanArg = arg.trim();
-                return `#${cleanArg}`;
-            });
-
-            // 2. concat(a, b) -> a .. b
-            trimmedLine = trimmedLine.replace(/\bconcat\s*\(([^)]+)\)/gi, (match, args) => {
-                const parts = smartSplitArgs(args);
-                if (parts.length === 2) {
-                    return `${parts[0].trim()} .. ${parts[1].trim()}`;
-                }
-                return match; // Si pas exactement 2 args, on laisse tel quel
-            });
-
-            // 3. ième(s, i) -> string.sub(s, i, i)
-            trimmedLine = trimmedLine.replace(/\bième\s*\(([^)]+)\)/gi, (match, args) => {
-                const parts = smartSplitArgs(args);
-                if (parts.length === 2) {
-                    const str = parts[0].trim();
-                    const idx = parts[1].trim();
-                    return `string.sub(${str}, ${idx}, ${idx})`;
-                }
-                return match;
-            });
-
-            // 4. souschaîne(s, i, j) -> string.sub(s, i, j)
-            trimmedLine = trimmedLine.replace(/\bsouschaîne\s*\(([^)]+)\)/gi, (match, args) => {
-                const parts = smartSplitArgs(args);
-                if (parts.length === 3) {
-                    return `string.sub(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()})`;
-                }
-                return match;
-            });
-
             // Appliquer le mapping des fonctions PSC -> helpers Lua (incluant TDA Liste)
             // On trie par longueur décroissante pour éviter qu'un préfixe remplace un nom plus long
             const sortedFunctions = [...PSC_DEFINITIONS.functions].sort((a, b) => b.name.length - a.name.length);
 
-            // Traiter les fonctions mutateurs en premier (celles qui modifient le premier argument)
-            const mutatorsHandled = new Set<string>();
-
             for (const func of sortedFunctions) {
-                if (func.isMutator) {
-                    // Pattern pour capturer les appels de fonction mutateur
-                    const funcCallRegex = new RegExp(`\\b(${func.name})\\s*\\(([^)]+)\\)`, 'giu');
-                    let match: RegExpExecArray | null;
-                    const newLine: string[] = [];
-                    let lastIndex = 0;
-
-                    while ((match = funcCallRegex.exec(trimmedLine)) !== null) {
-                        const fullCall = match[0];
-                        const argsStr = match[2];
-                        const args = smartSplitArgs(argsStr);
-
-                        if (args.length > 0) {
-                            const firstArg = args[0].trim();
-                            // Vérifier si ce n'est pas déjà une affectation
-                            const beforeCall = trimmedLine.substring(0, match.index);
-                            const isAlreadyAssignment = /[\w\s,]+\s*=\s*$/.test(beforeCall);
-
-                            if (!isAlreadyAssignment && !/^\s*(if|while|elseif|return)\b/i.test(trimmedLine)) {
-                                // Transformer en affectation: firstArg = func(firstArg, ...)
-                                newLine.push(trimmedLine.substring(lastIndex, match.index));
-                                newLine.push(`${firstArg} = ${func.luaHelper}(${argsStr})`);
-                                lastIndex = match.index + fullCall.length;
-                                mutatorsHandled.add(func.name.toLowerCase());
-                            }
-                        }
-                    }
-
-                    if (lastIndex > 0) {
-                        newLine.push(trimmedLine.substring(lastIndex));
-                        trimmedLine = newLine.join('');
-                    }
-                }
-            }
-
-            // Ensuite, remplacer les autres fonctions normalement
-            const specialStringFunctions = new Set(['longueur', 'concat', 'ième', 'souschaîne']);
-
-            for (const func of sortedFunctions) {
-                // Sauter si déjà traité comme mutateur ou fonction spéciale de chaîne
-                if (mutatorsHandled.has(func.name.toLowerCase()) || specialStringFunctions.has(func.name.toLowerCase())) {
-                    continue;
-                }
-
                 // Utiliser une regex qui respecte les frontières de mots pour éviter les remplacements partiels
                 const re = new RegExp(`(?<![\\p{L}0-9_])${func.name}\\b`, 'giu');
                 trimmedLine = trimmedLine.replace(re, func.luaHelper);
@@ -534,23 +441,3 @@ export function transpileToLua(pscCode: string): string {
     return helpers + luaCode;
 }
 
-export function executeCode(document: vscode.TextDocument) {
-    const pscCode = document.getText();
-    const luaCode = transpileToLua(pscCode);
-
-    console.log("--- Code Lua généré ---\n", luaCode, "\n--------------------------");
-
-    const tempDir = os.tmpdir();
-    const tempFilePath = path.join(tempDir, `psc_temp_${Date.now()}.lua`);
-    fs.writeFileSync(tempFilePath, luaCode);
-
-    const terminalName = "Pseudo-Code Execution";
-    let terminal = vscode.window.terminals.find(t => t.name === terminalName);
-    if (!terminal) {
-        terminal = vscode.window.createTerminal(terminalName);
-    }
-    terminal.show(true);
-
-    const command = `lua "${tempFilePath}"`;
-    terminal.sendText(command, true);
-}

@@ -1,8 +1,8 @@
 {
-  "name": "PseudoCode-Interpreter",
+  "name": "pseudocode-interpreter",
   "displayName": "PseudoCode Language Interpreter",
   "description": "Advanced syntax highlighting, intelligent snippets and symbol navigation for the PSC language.",
-  "version": "0.1.73",
+  "version": "0.1.80",
   "publisher": "LucasM54",
   "author": {
     "name": "Lucas Martinati"
@@ -19,9 +19,7 @@
     "Programming Languages"
   ],
   "main": "./out/extension.js",
-  "activationEvents": [
-    "onLanguage:psc"
-  ],
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
@@ -85,6 +83,8 @@
     }
   },
   "scripts": {
+    "generate-grammar": "tsc -p tsconfig.scripts.json && node out/scripts/generate-grammar.js",
+    "precompile": "npm run generate-grammar",
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"

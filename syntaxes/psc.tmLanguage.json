@@ -3,71 +3,129 @@
   "name": "PseudoCode",
   "scopeName": "source.psc",
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#chars" },
-    { "include": "#constants" },
-    { "include": "#declarations" },
-    { "include": "#for-loop" },
-    { "include": "#keywords" },
-    { "include": "#logical-operators" },
-    { "include": "#support-functions" },
-    { "include": "#storage" },
-    { "include": "#operators-assignment" },
-    { "include": "#operators-arithmetic" },
-    { "include": "#operators-comparison" },
-    { "include": "#function-call" },
-    { "include": "#variables" }
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#chars"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#for-loop"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#logical-operators"
+    },
+    {
+      "include": "#support-functions"
+    },
+    {
+      "include": "#storage"
+    },
+    {
+      "include": "#operators-assignment"
+    },
+    {
+      "include": "#operators-arithmetic"
+    },
+    {
+      "include": "#operators-comparison"
+    },
+    {
+      "include": "#function-call"
+    },
+    {
+      "include": "#variables"
+    }
   ],
   "repository": {
     "comments": {
       "patterns": [
-        { "name": "comment.line.double-slash", "match": "//.*" },
-        { "name": "comment.block", "begin": "/\\*", "end": "\\*/" }
+        {
+          "name": "comment.line.double-slash",
+          "match": "//.*"
+        },
+        {
+          "name": "comment.block",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
       ]
     },
     "keywords": {
       "name": "keyword.control",
-      "match": "(?i)\\b(Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin)\\b"
+      "match": "(?i)\\b(si|alors|sinon|fsi|ftq|pour|de|à|faire|fpour|décroissant|retourner|retourne|début|fin|algorithme|fonction|Tant(?:\\s+que)|ftant)\\b"
     },
     "logical-operators": {
       "name": "keyword.control",
-      "match": "(?i)\\b(et|ou|non)\\b"
+      "match": "(?i)\\b(et|ou|non|mod)\\b"
     },
     "for-loop": {
       "begin": "(?i)\\b(Pour)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s+(de|allant\\s+de)\\b",
       "beginCaptures": {
-        "1": { "name": "keyword.control" },
-        "2": { "name": "variable.other" },
-        "3": { "name": "keyword.control" }
+        "1": {
+          "name": "keyword.control"
+        },
+        "2": {
+          "name": "variable.other"
+        },
+        "3": {
+          "name": "keyword.control"
+        }
       },
       "end": "(?i)\\b(Faire)\\b",
       "endCaptures": {
-        "1": { "name": "keyword.control" }
+        "1": {
+          "name": "keyword.control"
+        }
       },
       "patterns": [
         {
           "match": "(?i)\\b(à|a)\\b",
           "name": "keyword.control"
         },
-        { "include": "$self" }
+        {
+          "include": "$self"
+        }
       ]
     },
     "support-functions": {
       "name": "support.function",
-      "match": "(?i)\\b(longueur|concat|souschaîne|ième|écrire|lire|retourner|retourne|fichierOuvrir|fichierFermer|fichierLire|fichierFin|chaineVersEntier|fichierCreer|fichierEcrire|tete|val|suc|finliste|listevide|ajoutteteliste|suppressionteteliste|ajoutqueueliste|suppressionqueueliste|ajoutliste|suppressionliste|changeliste|pilevide|sommet|estvidepile|empiler|depiler|filevide|estvidefile|enfiler|defiler|premier|ajoutfile|suppressionfile|estfilevide|tetels|queuels|valls|sucls|precls|finls|videls|ajouttetels|suppressiontetels|ajoutqueuels|suppressionqueuels|ajoutls|suppressionls|changels)\\b"
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|fichierouvrir|fichierfermer|fichierlire|fichierfin|chaineversentier|fichiercreer|fichierecrire|tete|val|suc|finliste|listevide|ajoutteteliste|suppressionteteliste|ajoutqueueliste|suppressionqueueliste|ajoutliste|suppressionliste|changeliste|tetels|queuels|valls|sucls|precls|finls|videls|ajouttetels|suppressiontetels|ajoutqueuels|suppressionqueuels|ajoutls|suppressionls|changels|pilevide|sommet|estvidepile|empiler|depiler|filevide|estvidefile|enfiler|defiler|premier|ajoutfile|suppressionfile|estfilevide|écrire|lire)\\b"
     },
     "storage": {
       "patterns": [
-        { "name": "storage.modifier", "match": "(?i)\\b(Lexique)\\b" },
         {
-          "name": "entity.name.type.declaration",
-          "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*=",
-          "captures": { "1": { "name": "entity.name.type" } }
+          "name": "storage.modifier",
+          "match": "(?i)\\b(inout|Lexique)\\b"
         },
         {
           "name": "storage.type",
-          "match": "(?i)\\b(entier|réel|booléen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym|Booleen|InOut)\\b(?!\\s*\\()"
+          "match": "(?i)(?<=:|de)\\s*\\b(pile|file)\\b"
+        },
+        {
+          "name": "entity.name.type.declaration",
+          "match": "^\\s*([A-Z][a-zA-Z0-9_]*)\\s*=",
+          "captures": {
+            "1": {
+              "name": "entity.name.type"
+            }
+          }
+        },
+        {
+          "name": "storage.type",
+          "match": "(?i)\\b(entier|réel|reel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|listesym|listesym|InOut)\\b(?!\\s*\\()"
         },
         {
           "name": "storage.type",
@@ -80,23 +138,37 @@
         {
           "begin": "(?i)^\\s*(Fonction)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\()",
           "beginCaptures": {
-            "1": { "name": "storage.modifier" },
-            "2": { "name": "entity.name.function" },
-            "3": { "name": "punctuation.definition.parameters.begin.psc" }
+            "1": {
+              "name": "storage.modifier"
+            },
+            "2": {
+              "name": "entity.name.function"
+            },
+            "3": {
+              "name": "punctuation.definition.parameters.begin.psc"
+            }
           },
           "end": "(\\))",
           "endCaptures": {
-            "1": { "name": "punctuation.definition.parameters.end.psc" }
+            "1": {
+              "name": "punctuation.definition.parameters.end.psc"
+            }
           },
           "patterns": [
-            { "include": "$self" }
+            {
+              "include": "$self"
+            }
           ]
         },
         {
           "match": "(?i)^\\s*(Algorithme)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
-            "1": { "name": "storage.modifier" },
-            "2": { "name": "entity.name.function.main" }
+            "1": {
+              "name": "storage.modifier"
+            },
+            "2": {
+              "name": "entity.name.function.main"
+            }
           }
         }
       ]
@@ -104,7 +176,9 @@
     "function-call": {
       "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin|et|ou|non)\\b)([a-zA-Z_][a-zA-Z0-9_]*)(?=\\s*\\()",
       "captures": {
-        "1": { "name": "entity.name.function.call" }
+        "1": {
+          "name": "entity.name.function.call"
+        }
       }
     },
     "strings": {
@@ -118,12 +192,18 @@
     },
     "constants": {
       "patterns": [
-        { "name": "constant.numeric", "match": "\\b\\d+(\\.\\d+)?\\b" },
+        {
+          "name": "constant.numeric",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
         {
           "name": "constant.language.boolean",
           "match": "(?i)\\b(vrai|faux)\\b"
         },
-        { "name": "constant.language", "match": "\\bFIN_LIGNE\\b" }
+        {
+          "name": "constant.language",
+          "match": "\\bFIN_LIGNE\\b"
+        }
       ]
     },
     "operators-assignment": {
@@ -142,5 +222,6 @@
       "name": "variable.other",
       "match": "(?i)\\b(?!(?:Si|Alors|Sinon|fsi|Pour|Faire|fpour|Tant(?:\\s+que)|ftq|ftant|Début|Fin|et|ou|non)\\b)[a-zA-Z_][a-zA-Z0-9_]*\\b"
     }
-  }
+  },
+  "_WARNING": "Ce fichier est généré automatiquement par scripts/generate-grammar.ts - NE PAS MODIFIER MANUELLEMENT - Modifier src/definitions.ts à la place"
 }

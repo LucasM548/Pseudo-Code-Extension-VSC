@@ -3,74 +3,34 @@
  * Tous les patterns regex et mots-clés sont définis ici pour éviter la duplication
  */
 
+import { PSC_DEFINITIONS } from './definitions';
+
 // Mots-clés du langage
 export const KEYWORDS = {
-    CONTROL: ['si', 'alors', 'sinon', 'fsi', 'tant', 'que', 'ftq', 'pour', 'de', 'à', 'faire', 'fpour', 'décroissant', 'retourner', 'retourne'],
-    BLOCKS: ['début', 'fin', 'algorithme', 'fonction'],
-    TYPES: ['entier', 'réel', 'booléen', 'booleen', 'chaîne', 'chaine', 'caractère', 'caractere', 'tableau', 'liste', 'pile', 'file', 'listesym'],
-    BOOLEAN: ['vrai', 'faux'],
-    OPERATORS: ['et', 'ou', 'non', 'mod'],
-    IO: ['écrire', 'lire'],
-    STRING_OPS: ['longueur', 'concat', 'souschaîne', 'ième'],
-    FILE_OPS: ['fichierouvrir', 'fichierfermer', 'fichierlire', 'fichierfin', 'chaineversentier', 'fichiercreer', 'fichierecrire'],
+    CONTROL: PSC_DEFINITIONS.keywords.filter(k => k.type === 'control').map(k => k.name),
+    BLOCKS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'block').map(k => k.name),
+    TYPES: PSC_DEFINITIONS.types.flatMap(t => t.aliases),
+    BOOLEAN: PSC_DEFINITIONS.keywords.filter(k => k.type === 'boolean').map(k => k.name),
+    OPERATORS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'operator').map(k => k.name),
+    IO: PSC_DEFINITIONS.keywords.filter(k => k.type === 'io').map(k => k.name),
+    STRING_OPS: ['longueur', 'concat', 'souschaîne', 'ième'], // Gardés ici car traitement spécial
+    FILE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.startsWith('fichier') || f.name === 'chaineversentier').map(f => f.name),
     // Opérations TDA Liste (en minuscules)
-    LIST_OPS: ['tete', 'val', 'suc', 'finliste', 'listevide', 'ajoutteteliste', 'suppressionteteliste', 'ajoutqueueliste', 'suppressionqueueliste', 'ajoutliste', 'suppressionliste', 'changeliste'],
+    LIST_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.endsWith('liste') || ['tete', 'val', 'suc', 'finliste', 'listevide'].includes(f.name)).map(f => f.name),
     // Opérations TDA ListeSym
-    LISTESYM_OPS: ['tetels', 'queuels', 'valls', 'sucls', 'precls', 'finls', 'videls', 'ajouttetels', 'suppressiontetels', 'ajoutqueuels', 'suppressionqueuels', 'ajoutls', 'suppressionls', 'changels'],
+    LISTESYM_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.endsWith('ls')).map(f => f.name),
     // Opérations TDA Pile
-    STACK_OPS: ['pilevide', 'sommet', 'estvidepile', 'empiler', 'depiler'],
+    STACK_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('pile') || f.name === 'sommet' || f.name === 'empiler' || f.name === 'depiler').map(f => f.name),
     // Opérations TDA File
-    QUEUE_OPS: ['filevide', 'tete', 'estvidefile', 'enfiler', 'defiler', 'premier', 'ajoutfile', 'suppressionfile', 'estfilevide'],
-    MODIFIERS: ['inout']
+    QUEUE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('file') || f.name === 'premier').map(f => f.name),
+    MODIFIERS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'modifier').map(k => k.name)
 } as const;
 
 // Arité attendue des fonctions intégrées (pour le linter)
 // Clés en minuscules (comparaison insensible à la casse côté linter)
-export const BUILTIN_FUNCTION_ARITY: Record<string, number> = {
-    // TDA Liste
-    'tete': 1,
-    'val': 2,
-    'suc': 2,
-    'finliste': 2,
-    'listevide': 0,
-    'ajoutteteliste': 2,
-    'suppressionteteliste': 1,
-    'ajoutqueueliste': 2,
-    'suppressionqueueliste': 1,
-    'ajoutliste': 3,
-    'suppressionliste': 2,
-    'changeliste': 3,
-    // TDA Pile
-    'pilevide': 0,
-    'sommet': 1,
-    'estvidepile': 1,
-    'empiler': 2,
-    'depiler': 1,
-    // TDA File
-    'filevide': 0,
-    'estvidefile': 1,
-    'enfiler': 2,
-    'defiler': 1,
-    'premier': 1,
-    'ajoutfile': 2,
-    'suppressionfile': 1,
-    'estfilevide': 1,
-    // TDA ListeSym
-    'tetels': 1,
-    'queuels': 1,
-    'valls': 2,
-    'sucls': 2,
-    'precls': 2,
-    'finls': 2,
-    'videls': 0,
-    'ajouttetels': 2,
-    'suppressiontetels': 1,
-    'ajoutqueuels': 2,
-    'suppressionqueuels': 1,
-    'ajoutls': 3,
-    'suppressionls': 2,
-    'changels': 3
-};
+export const BUILTIN_FUNCTION_ARITY: Record<string, number> = Object.fromEntries(
+    PSC_DEFINITIONS.functions.map(f => [f.name, f.arity])
+);
 
 // Tous les identifiants connus (pour le linter)
 export const KNOWN_IDENTIFIERS = new Set([
@@ -146,102 +106,30 @@ export const PATTERNS = {
 } as const;
 
 // Mapping des types normalisés
-export const TYPE_MAPPING: Record<string, string> = {
-    'booléen': 'booléen',
-    'booleen': 'booléen',
-    'réel': 'réel',
-    'reel': 'réel',
-    'entier': 'entier',
-    'chaîne': 'chaîne',
-    'chaine': 'chaîne',
-    'caractère': 'caractère',
-    'caractere': 'caractère',
-    'tableau': 'tableau',
-    'liste': 'liste',
-    'pile': 'pile',
-    'file': 'file',
-    'listesym': 'listesym'
-};
+export const TYPE_MAPPING: Record<string, string> = Object.fromEntries(
+    PSC_DEFINITIONS.types.flatMap(t => t.aliases.map(alias => [alias, t.name]))
+);
 
 // Remplacements de symboles pour Lua
 export const LUA_REPLACEMENTS: Record<string, string> = {
-    // Booléens
-    'vrai': 'true',
-    'faux': 'false',
-
-    // Opérateurs logiques
-    'non': 'not',
-    'ou': 'or',
-    'et': 'and',
-
-    // Opérateurs arithmétiques
-    'mod': '%',
+    ...Object.fromEntries(
+        PSC_DEFINITIONS.keywords
+            .filter(k => k.luaEquivalent)
+            .map(k => [k.name, k.luaEquivalent!])
+    ),
+    // Opérateurs arithmétiques et spéciaux non couverts par les mots-clés simples
     '≠': '~=',
     '≤': '<=',
     '≥': '>=',
     '÷': '//',
-
-    // IO
     'lire()': 'io.read()',
-
-    // Symboles spéciaux
     'FIN_LIGNE': "'\n'"
 } as const;
 
 // Fonctions PSC mappées vers des helpers Lua
-export const FUNCTION_MAPPING: Record<string, string> = {
-    'fichierOuvrir': '__psc_fichierOuvrir',
-    'fichierFermer': '__psc_fichierFermer',
-    'fichierLire': '__psc_fichierLire',
-    'fichierFin': '__psc_fichierFin',
-    'chaineVersEntier': '__psc_chaineVersEntier',
-    'fichierCreer': '__psc_fichierCreer',
-    'fichierEcrire': '__psc_fichierEcrire',
-    'écrire': '__psc_write',
-    // TDA Liste (places entières)
-    'tete': '__psc_generic_tete',
-    'val': '__psc_liste_val',
-    'suc': '__psc_liste_suc',
-    'finListe': '__psc_liste_fin',
-    'listeVide': '__psc_liste_vide',
-    'ajoutTeteListe': '__psc_liste_ajout_tete',
-    'suppressionTeteListe': '__psc_liste_suppression_tete',
-    'ajoutQueueListe': '__psc_liste_ajout_queue',
-    'suppressionQueueListe': '__psc_liste_suppression_queue',
-    'ajoutListe': '__psc_liste_ajout',
-    'suppressionListe': '__psc_liste_suppression',
-    'changeListe': '__psc_liste_change',
-    // TDA Pile
-    'pileVide': '__psc_pile_vide',
-    'sommet': '__psc_pile_sommet',
-    'estVidePile': '__psc_pile_est_vide',
-    'empiler': '__psc_pile_empiler',
-    'depiler': '__psc_pile_depiler',
-    // TDA File
-    'fileVide': '__psc_file_vide',
-    'estVideFile': '__psc_file_est_vide',
-    'enfiler': '__psc_file_enfiler',
-    'defiler': '__psc_file_defiler',
-    'premier': '__psc_file_premier',
-    'ajoutFile': '__psc_file_enfiler',
-    'suppressionFile': '__psc_file_defiler',
-    'estFileVide': '__psc_file_est_vide',
-    // TDA ListeSym
-    'teteLS': '__psc_listesym_tete',
-    'queueLS': '__psc_listesym_queue',
-    'valLS': '__psc_listesym_val',
-    'sucLS': '__psc_listesym_suc',
-    'precLS': '__psc_listesym_prec',
-    'finLS': '__psc_listesym_fin',
-    'videLS': '__psc_listesym_vide',
-    'ajoutTeteLS': '__psc_listesym_ajout_tete',
-    'suppressionTeteLS': '__psc_listesym_suppression_tete',
-    'ajoutQueueLS': '__psc_listesym_ajout_queue',
-    'suppressionQueueLS': '__psc_listesym_suppression_queue',
-    'ajoutLS': '__psc_listesym_ajout',
-    'suppressionLS': '__psc_listesym_suppression',
-    'changeLS': '__psc_listesym_change'
-} as const;
+export const FUNCTION_MAPPING: Record<string, string> = Object.fromEntries(
+    PSC_DEFINITIONS.functions.map(f => [f.name, f.luaHelper])
+);
 
 // Helpers Lua
 export const LUA_HELPERS = `local __psc_file_handles = {}
@@ -327,6 +215,11 @@ end
 
 -- Sérialisation générique (incluant listes TDA au format (a, b, c))
 local function __psc_serialize(v)
+    -- Gestion des valeurs nil (listes vides)
+    if v == nil then
+        return '()'
+    end
+    
     if type(v) == 'table' then
         if __psc_is_liste(v) then
             local parts = {}
@@ -350,12 +243,15 @@ local function __psc_serialize(v)
             -- Si c'est un noeud isolé, on l'affiche simplement
             return '{val=' .. tostring(v.val) .. '}'
         elseif __psc_is_array(v) then
+            -- Détection de pile ou file basée sur des métadonnées (optionnel)
+            -- Pour l'instant, on affiche simplement les tableaux avec [...]
             local parts = {}
             for i = 1, #v do
                 parts[#parts+1] = __psc_serialize(v[i])
             end
             return '[' .. table.concat(parts, ', ') .. ']'
         else
+            -- Objet/enregistrement générique
             local parts = {}
             for k, val in pairs(v) do
                 parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
@@ -366,6 +262,8 @@ local function __psc_serialize(v)
         return v
     elseif type(v) == 'boolean' then
         return v and 'Vrai' or 'Faux'
+    elseif type(v) == 'number' then
+        return tostring(v)
     else
         return tostring(v)
     end
