@@ -33,7 +33,8 @@ export const PSC_DEFINITIONS = {
         { name: 'liste', aliases: ['liste'] },
         { name: 'pile', aliases: ['pile'] },
         { name: 'file', aliases: ['file'] },
-        { name: 'listesym', aliases: ['listesym'] }
+        { name: 'listesym', aliases: ['listesym'] },
+        { name: 'table', aliases: ['table'] }
     ] as PscType[],
 
     keywords: [
@@ -139,6 +140,15 @@ export const PSC_DEFINITIONS = {
         { name: 'premier', arity: 1, luaHelper: '__psc_file_premier' },
         { name: 'ajoutfile', arity: 2, luaHelper: '__psc_file_enfiler' }, // Alias
         { name: 'suppressionfile', arity: 1, luaHelper: '__psc_file_defiler' }, // Alias
-        { name: 'estfilevide', arity: 1, luaHelper: '__psc_file_est_vide' } // Alias
+        { name: 'estfilevide', arity: 1, luaHelper: '__psc_file_est_vide' }, // Alias
+
+        // TDA Table (Dictionnaire/Map: Clé -> Valeur)
+        { name: 'tablevide', arity: 0, luaHelper: '__psc_table_vide' },
+        { name: 'domaine', arity: 1, luaHelper: '__psc_table_domaine' },
+        { name: 'accestable', arity: 2, luaHelper: '__psc_table_acces' },
+        { name: 'ajouttable', arity: 3, luaHelper: '__psc_table_ajout', isMutator: true },
+        { name: 'suppressiontable', arity: 2, luaHelper: '__psc_table_suppression', isMutator: true },
+        { name: 'changetable', arity: 3, luaHelper: '__psc_table_change', isMutator: true },
+        { name: 'estdans', arity: 2, luaHelper: '__psc_ensemble_estdans' } // Pour vérifier appartenance à un ensemble
     ] as PscFunction[]
 };

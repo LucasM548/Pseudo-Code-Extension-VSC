@@ -23,6 +23,8 @@ export const KEYWORDS = {
     STACK_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('pile') || f.name === 'sommet' || f.name === 'empiler' || f.name === 'depiler').map(f => f.name),
     // Opérations TDA File
     QUEUE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('file') || f.name === 'premier').map(f => f.name),
+    // Opérations TDA Table
+    TABLE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('table') || f.name === 'domaine' || f.name === 'estdans').map(f => f.name),
     MODIFIERS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'modifier').map(k => k.name)
 } as const;
 
@@ -46,6 +48,7 @@ export const KNOWN_IDENTIFIERS = new Set([
     ...KEYWORDS.STACK_OPS,
     ...KEYWORDS.QUEUE_OPS,
     ...KEYWORDS.LISTESYM_OPS,
+    ...KEYWORDS.TABLE_OPS,
     ...KEYWORDS.MODIFIERS,
     'lexique', 'fin_ligne'
 ]);
@@ -234,6 +237,15 @@ local function __psc_serialize(v)
                 parts[#parts+1] = __psc_serialize(v[i])
             end
             return 'File[' .. table.concat(parts, ', ') .. ']'
+        elseif v._type == 'table' then
+            -- Table (dictionnaire/map)
+            local parts = {}
+            if v._data then
+                for k, val in pairs(v._data) do
+                    parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
+                end
+            end
+            return 'Table{' .. table.concat(parts, ', ') .. '}'
         elseif __psc_is_liste(v) then
             local parts = {}
             local node = v
@@ -263,10 +275,10 @@ local function __psc_serialize(v)
             end
             return '[' .. table.concat(parts, ', ') .. ']'
         else
-            -- Objet/enregistrement générique (filtrer _type interne)
+            -- Objet/enregistrement générique (filtrer _type et _data internes)
             local parts = {}
             for k, val in pairs(v) do
-                if k ~= '_type' then
+                if k ~= '_type' and k ~= '_data' then
                     parts[#parts+1] = tostring(k) .. ':' .. __psc_serialize(val)
                 end
             end
@@ -617,6 +629,68 @@ local function __psc_listesym_from_table(t)
         __psc_listesym_ajout_queue(l, t[i])
     end
     return l
+end
+
+-- =================================================================================================================
+-- TDA Table (Dictionnaire/Map: Clé -> Valeur)
+-- =================================================================================================================
+local function __psc_table_vide()
+    return {_type = 'table', _data = {}}
+end
+
+-- Retourne l'ensemble des clés (domaine) de la table
+local function __psc_table_domaine(t)
+    local keys = {}
+    if type(t) == 'table' and t._data then
+        for k, _ in pairs(t._data) do
+            table.insert(keys, k)
+        end
+    end
+    return keys
+end
+
+-- Accès à une valeur par clé (retourne nil si la clé n'existe pas)
+local function __psc_table_acces(t, cle)
+    if type(t) == 'table' and t._data then
+        return t._data[cle]
+    end
+    return nil
+end
+
+-- Ajout d'une entrée (clé, valeur) dans la table
+local function __psc_table_ajout(t, cle, valeur)
+    if type(t) == 'table' and t._data then
+        t._data[cle] = valeur
+    end
+    return t
+end
+
+-- Suppression d'une entrée de la table
+local function __psc_table_suppression(t, cle)
+    if type(t) == 'table' and t._data then
+        t._data[cle] = nil
+    end
+    return t
+end
+
+-- Changement de la valeur associée à une clé
+local function __psc_table_change(t, cle, valeur)
+    if type(t) == 'table' and t._data then
+        t._data[cle] = valeur
+    end
+    return t
+end
+
+-- Fonction utilitaire: vérifier si un élément est dans un ensemble (table/liste)
+local function __psc_ensemble_estdans(ensemble, element)
+    if type(ensemble) == 'table' then
+        for _, v in ipairs(ensemble) do
+            if v == element then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- =================================================================================================================

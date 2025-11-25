@@ -102,7 +102,7 @@
     },
     "support-functions": {
       "name": "support.function",
-      "match": "(?i)\\b(longueur|concat|souschaîne|ième|fichierouvrir|fichierfermer|fichierlire|fichierfin|chaineversentier|fichiercreer|fichierecrire|tete|val|suc|finliste|listevide|ajoutteteliste|suppressionteteliste|ajoutqueueliste|suppressionqueueliste|ajoutliste|suppressionliste|changeliste|tetels|queuels|valls|sucls|precls|finls|videls|ajouttetels|suppressiontetels|ajoutqueuels|suppressionqueuels|ajoutls|suppressionls|changels|pilevide|sommet|estvidepile|empiler|depiler|filevide|estvidefile|enfiler|defiler|premier|ajoutfile|suppressionfile|estfilevide|écrire|lire)\\b"
+      "match": "(?i)\\b(longueur|concat|souschaîne|ième|fichierouvrir|fichierfermer|fichierlire|fichierfin|chaineversentier|fichiercreer|fichierecrire|tete|val|suc|finliste|listevide|ajoutteteliste|suppressionteteliste|ajoutqueueliste|suppressionqueueliste|ajoutliste|suppressionliste|changeliste|tetels|queuels|valls|sucls|precls|finls|videls|ajouttetels|suppressiontetels|ajoutqueuels|suppressionqueuels|ajoutls|suppressionls|changels|pilevide|sommet|estvidepile|empiler|depiler|filevide|estvidefile|enfiler|defiler|premier|ajoutfile|suppressionfile|estfilevide|tablevide|domaine|accestable|ajouttable|suppressiontable|changetable|estdans|écrire|lire)\\b"
     },
     "storage": {
       "patterns": [
@@ -125,7 +125,7 @@
         },
         {
           "name": "storage.type",
-          "match": "(?i)\\b(entier|réel|reel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|listesym|listesym|InOut)\\b(?!\\s*\\()"
+          "match": "(?i)\\b(entier|réel|reel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|listesym|table|listesym|InOut)\\b(?!\\s*\\()"
         },
         {
           "name": "storage.type",
