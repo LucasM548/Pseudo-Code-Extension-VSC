@@ -13,19 +13,13 @@ export const KEYWORDS = {
     BOOLEAN: PSC_DEFINITIONS.keywords.filter(k => k.type === 'boolean').map(k => k.name),
     OPERATORS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'operator').map(k => k.name),
     IO: PSC_DEFINITIONS.keywords.filter(k => k.type === 'io').map(k => k.name),
-    STRING_OPS: ['longueur', 'concat', 'souschaîne', 'ième'], // Gardés ici car traitement spécial
-    FILE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.startsWith('fichier') || f.name === 'chaineversentier').map(f => f.name),
-    // Opérations TDA Liste (en minuscules)
-    LIST_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.endsWith('liste') || ['tete', 'val', 'suc', 'finliste', 'listevide'].includes(f.name)).map(f => f.name),
-    // Opérations TDA ListeSym
-    LISTESYM_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.endsWith('ls')).map(f => f.name),
-    // Opérations TDA Pile
-    STACK_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('pile') || f.name === 'sommet' || f.name === 'empiler' || f.name === 'depiler').map(f => f.name),
-    // Opérations TDA File
-    QUEUE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('file') || f.name === 'premier').map(f => f.name),
-    // Opérations TDA Table
-    TABLE_OPS: PSC_DEFINITIONS.functions.filter(f => f.name.includes('table') || f.name === 'domaine' || f.name === 'estdans').map(f => f.name),
-    MODIFIERS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'modifier').map(k => k.name)
+    MODIFIERS: PSC_DEFINITIONS.keywords.filter(k => k.type === 'modifier').map(k => k.name),
+
+    // Fonctions spéciales avec traitement particulier dans l'executor
+    STRING_OPS: ['longueur', 'concat', 'souschaîne', 'ième'],
+
+    // TOUTES les fonctions sont maintenant automatiquement extraites de definitions.ts
+    ALL_FUNCTIONS: PSC_DEFINITIONS.functions.map(f => f.name)
 } as const;
 
 // Arité attendue des fonctions intégrées (pour le linter)
@@ -35,6 +29,7 @@ export const BUILTIN_FUNCTION_ARITY: Record<string, number> = Object.fromEntries
 );
 
 // Tous les identifiants connus (pour le linter)
+// ✨ AUTOMATIQUE : Toute fonction ajoutée dans definitions.ts sera automatiquement reconnue
 export const KNOWN_IDENTIFIERS = new Set([
     ...KEYWORDS.CONTROL,
     ...KEYWORDS.BLOCKS,
@@ -42,14 +37,9 @@ export const KNOWN_IDENTIFIERS = new Set([
     ...KEYWORDS.BOOLEAN,
     ...KEYWORDS.OPERATORS,
     ...KEYWORDS.IO,
-    ...KEYWORDS.STRING_OPS,
-    ...KEYWORDS.FILE_OPS,
-    ...KEYWORDS.LIST_OPS,
-    ...KEYWORDS.STACK_OPS,
-    ...KEYWORDS.QUEUE_OPS,
-    ...KEYWORDS.LISTESYM_OPS,
-    ...KEYWORDS.TABLE_OPS,
     ...KEYWORDS.MODIFIERS,
+    ...KEYWORDS.STRING_OPS,
+    ...KEYWORDS.ALL_FUNCTIONS,  // ✅ Toutes les fonctions automatiquement !
     'lexique', 'fin_ligne'
 ]);
 
