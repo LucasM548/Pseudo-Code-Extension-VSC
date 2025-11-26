@@ -11,7 +11,7 @@
     "type": "git",
     "url": "https://github.com/LucasM548/Pseudo-Code-Extension-VSC"
   },
-  "icon": "icons/icon.png",
+  "icon": "icons/extension-logo.png",
   "engines": {
     "vscode": "^0.99.0"
   },
@@ -24,6 +24,10 @@
     "languages": [
       {
         "id": "psc",
+        "icon": {
+          "light": "./icons/psc-icon-white.png",
+          "dark": "./icons/psc-icon.png"
+        },
         "aliases": [
           "PseudoCode",
           "psc"
