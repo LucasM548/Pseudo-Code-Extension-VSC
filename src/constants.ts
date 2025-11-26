@@ -683,6 +683,21 @@ local function __psc_ensemble_estdans(ensemble, element)
     return false
 end
 
+-- Créer une table à partir de paires (clé, valeur, clé, valeur, ...)
+-- Utilisé pour la syntaxe Table("Alice" → "1234", "Bob" → "5678")
+local function __psc_table_from_pairs(...)
+    local t = __psc_table_vide()
+    local pairs_list = {...}
+    for i = 1, #pairs_list, 2 do
+        local cle = pairs_list[i]
+        local valeur = pairs_list[i + 1]
+        if cle ~= nil and valeur ~= nil then
+            t._data[cle] = valeur
+        end
+    end
+    return t
+end
+
 -- =================================================================================================================
 -- =================================================================================================================
 -- =================================================================================================================

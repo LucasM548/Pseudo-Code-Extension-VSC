@@ -319,9 +319,19 @@ export function transpileToLua(pscCode: string): string {
 
             if (!lineIsFullyProcessed) {
                 if (/^\s*Pour\s/i.test(trimmedLine)) {
-                    isForLoop = true;
-                    let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
-                    trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                    // Vérifier si c'est une boucle d'itération sur table: "Pour cle de table Faire"
+                    const tableIterMatch = /^\s*Pour\s+([^\s]+)\s+de\s+([^\s]+)\s+Faire\s*:?$/i.exec(trimmedLine);
+                    if (tableIterMatch) {
+                        const iterVar = tableIterMatch[1];
+                        const tableVar = tableIterMatch[2];
+                        // Générer une boucle Lua qui itère sur les clés de la table
+                        trimmedLine = `for ${iterVar}, _ in pairs(${tableVar}._data) do`;
+                    } else {
+                        // Boucle classique (allant de ... à ...)
+                        isForLoop = true;
+                        let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
+                        trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                    }
                 } else if (/^\s*Tant que\b/i.test(trimmedLine)) {
                     trimmedLine = trimmedLine.replace(/^\s*Tant que\b/i, 'while').replace(/\s+Faire\s*:?/i, ' do');
                 } else if (/^\s*Si\b/i.test(trimmedLine)) {
@@ -376,6 +386,13 @@ export function transpileToLua(pscCode: string): string {
                     return '__psc_file_vide()';
                 }
                 return `__psc_file_from_values({${args}})`;
+            });
+
+            // 5. Table("Alice" → "1234", "Bob" → "5678") → table avec paires clé-valeur
+            trimmedLine = trimmedLine.replace(/\bTable\s*\(([^)]+)\)/gi, (match, args) => {
+                // Remplacer les flèches → par des virgules pour séparer clés et valeurs
+                const normalizedArgs = args.replace(/\s*→\s*/g, ', ');
+                return `__psc_table_from_pairs(${normalizedArgs})`;
             });
 
             // ========== TRAITEMENT SPÉCIAL DES FONCTIONS DE CHAÎNES ==========
