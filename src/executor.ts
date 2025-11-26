@@ -268,12 +268,8 @@ export function transpileToLua(pscCode: string): string {
         }
         if (!lineIsFullyProcessed && /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu.test(trimmedLine)) {
             const varName = trimmedLine.split('←')[0].trim();
-            const varType = normalizeType((variableTypes.get(varName) || '').toLowerCase());
-            if (varType === 'entier' || varType === 'réel') {
-                trimmedLine = `${varName} = tonumber(io.read())`;
-            } else {
-                trimmedLine = `${varName} = io.read()`;
-            }
+            // __psc_lire() gère automatiquement la conversion en nombre si possible
+            trimmedLine = `${varName} = __psc_lire()`;
             lineIsFullyProcessed = true;
         }
 
@@ -496,7 +492,7 @@ export function transpileToLua(pscCode: string): string {
                 .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
                 .replace(/\bnon\b/gi, 'not').replace(/\bou\b/gi, 'or').replace(/\bet\b/gi, 'and')
                 .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//')
-                .replace(/\bFIN_LIGNE\b/g, "'\n'");
+                .replace(/\bFIN_LIGNE\b/g, "'\\n'");
 
             if (!isForLoop && !lineIsFullyProcessed) {
                 const conditionEq = (s: string) => s.replace(/(^|[^<>=~])=(?!=)/g, '$1==');
@@ -537,7 +533,7 @@ export function transpileToLua(pscCode: string): string {
 
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
-                .replace(/lire\s*\(\)/gi, 'io.read()');
+                .replace(/lire\s*\(\)/gi, '__psc_lire()');
 
             // Nettoyer les marqueurs de table
             trimmedLine = trimmedLine.replace(/__PSC_TABLE_START__/g, '').replace(/__PSC_TABLE_END__/g, '');

@@ -115,7 +115,7 @@ export const LUA_REPLACEMENTS: Record<string, string> = {
     '≤': '<=',
     '≥': '>=',
     '÷': '//',
-    'lire()': 'io.read()',
+    'lire()': '__psc_lire()',
     'FIN_LIGNE': "'\n'"
 } as const;
 
@@ -178,6 +178,19 @@ end
 local function __psc_chaineVersEntier(chaine)
     return tonumber(chaine) or 0
 end
+
+-- Fonction de lecture personnalisée qui convertit automatiquement en nombre si possible
+local function __psc_lire()
+    local input = io.read()
+    if input then
+        local num = tonumber(input)
+        if num then
+            return num
+        end
+    end
+    return input
+end
+
 
 local function __psc_is_array(t)
     if type(t) ~= 'table' then return false end
