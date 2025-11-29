@@ -87,7 +87,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             const lhsText = trimmedText.substring(0, assignmentIndex).trim();
             const rhsText = trimmedText.substring(assignmentIndex + 1).trim();
             checkVariablesInExpression(rhsText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
-            checkFunctionCallsInExpression(rhsText, declaredFunctions, line, diagnostics);
+            checkFunctionCallsInExpression(rhsText, declaredFunctions, declaredCompositeTypes, line, diagnostics);
             const lhsVarMatch = lhsText.match(/^([\p{L}_][\p{L}0-9_]*)/u);
             if (lhsVarMatch) {
                 const lhsVar = lhsVarMatch[1];
@@ -97,7 +97,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
             checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         } else {
             checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
-            checkFunctionCallsInExpression(trimmedText, declaredFunctions, line, diagnostics);
+            checkFunctionCallsInExpression(trimmedText, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         }
 
         const isClosingBlock = PATTERNS.CLOSING_KEYWORDS.test(trimmedText);
@@ -160,6 +160,7 @@ function checkVariablesInExpression(
 function checkFunctionCallsInExpression(
     expression: string,
     declaredFunctions: Set<string>,
+    declaredCompositeTypes: Set<string>,
     line: vscode.TextLine,
     diagnostics: vscode.Diagnostic[]
 ): void {
@@ -217,7 +218,7 @@ function checkFunctionCallsInExpression(
                         vscode.DiagnosticSeverity.Error
                     ));
                 }
-            } else if (!declaredFunctions.has(funcName) && !KNOWN_IDENTIFIERS.has(lower)) {
+            } else if (!declaredFunctions.has(funcName) && !KNOWN_IDENTIFIERS.has(lower) && !declaredCompositeTypes.has(lower)) {
                 const startCol = expressionOffsetInLine + i;
                 const range = new vscode.Range(line.lineNumber, startCol, line.lineNumber, startCol + funcName.length);
                 diagnostics.push(new vscode.Diagnostic(

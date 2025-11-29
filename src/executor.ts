@@ -259,8 +259,12 @@ export function transpileToLua(pscCode: string): string {
             if (isFunctionEnd) {
                 const funcInfo = functionStack.pop();
                 if (funcInfo && funcInfo.inOutParamNames.length > 0) {
-                    const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
-                    luaCode += `${indentation}\treturn ${funcInfo.inOutParamNames.join(', ')}\n`;
+                    // Vérifier si la dernière instruction n'était pas déjà un retour
+                    const lastLine = luaCode.trim().split('\n').pop() || '';
+                    if (!/^\s*return\b/.test(lastLine)) {
+                        const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+                        luaCode += `${indentation}\treturn ${funcInfo.inOutParamNames.join(', ')}\n`;
+                    }
                 }
             }
             trimmedLine = 'end';
@@ -487,8 +491,40 @@ export function transpileToLua(pscCode: string): string {
             }
 
             // Remplacements spécifiques pour les opérateurs et mots-clés
+
+            // Traitement spécifique de 'retourner' pour inclure les paramètres InOut
+            if (/^\s*retourne(?:r)?\b/i.test(trimmedLine)) {
+                const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : null;
+                let inOutSuffix = '';
+                if (currentFunc && currentFunc.inOutParamNames.length > 0) {
+                    inOutSuffix = ', ' + currentFunc.inOutParamNames.join(', ');
+                }
+
+                if (/^\s*retourne(?:r)?\s*\(/i.test(trimmedLine)) {
+                    // retourner(val) -> return val, inOut...
+                    trimmedLine = trimmedLine.replace(/^\s*retourne(?:r)?\s*\((.*)\)/i, (m, val) => `return ${val}${inOutSuffix}`);
+                } else {
+                    // retourner val ou retourner
+                    const valMatch = /^\s*retourne(?:r)?\s+(.+)$/i.exec(trimmedLine);
+                    if (valMatch) {
+                        trimmedLine = `return ${valMatch[1]}${inOutSuffix}`;
+                    } else {
+                        // Juste retourner
+                        if (inOutSuffix) {
+                            // Si retour vide mais on a des InOut, on retourne les InOut
+                            trimmedLine = `return ${inOutSuffix.substring(2)}`; // enlever ', ' initial
+                        } else {
+                            trimmedLine = 'return';
+                        }
+                    }
+                }
+            } else {
+                // Si ce n'est pas un 'retourner', on applique le remplacement standard (au cas où)
+                trimmedLine = trimmedLine
+                    .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return');
+            }
+
             trimmedLine = trimmedLine
-                .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return') // Cas particulier retour
                 .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
                 .replace(/\bnon\b/gi, 'not').replace(/\bou\b/gi, 'or').replace(/\bet\b/gi, 'and')
                 .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//')
@@ -602,6 +638,11 @@ export function executeCode(document: vscode.TextDocument) {
         terminal = vscode.window.createTerminal(terminalName);
     }
     terminal.show(true);
+
+    // Sur Windows, forcer l'encodage UTF-8 pour éviter les caractères corrompus
+    if (os.platform() === 'win32') {
+        terminal.sendText('chcp 65001 >nul', true);
+    }
 
     const command = `lua "${tempFilePath}"`;
     terminal.sendText(command, true);

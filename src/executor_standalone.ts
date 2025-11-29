@@ -251,8 +251,12 @@ export function transpileToLua(pscCode: string): string {
             if (isFunctionEnd) {
                 const funcInfo = functionStack.pop();
                 if (funcInfo && funcInfo.inOutParamNames.length > 0) {
-                    const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
-                    luaCode += `${indentation}\treturn ${funcInfo.inOutParamNames.join(', ')}\n`;
+                    // Vérifier si la dernière instruction n'était pas déjà un retour
+                    const lastLine = luaCode.trim().split('\n').pop() || '';
+                    if (!/^\s*return\b/.test(lastLine)) {
+                        const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+                        luaCode += `${indentation}\treturn ${funcInfo.inOutParamNames.join(', ')}\n`;
+                    }
                 }
             }
             trimmedLine = 'end';
@@ -331,6 +335,90 @@ export function transpileToLua(pscCode: string): string {
             // Transformer les littéraux de liste entre parenthèses en appels helper
             trimmedLine = transformParenListLiterals(trimmedLine);
 
+            // ========== TRAITEMENT SPÉCIAL DES FONCTIONS DE CHAÎNES ==========
+            // Ces fonctions ne se mappent pas directement à des fonctions Lua
+
+            // 1. longueur(x) -> #x
+            trimmedLine = trimmedLine.replace(/\blongueur\s*\(([^)]+)\)/gi, (match, arg) => {
+                const cleanArg = arg.trim();
+                return `#${cleanArg}`;
+            });
+
+            // 2. concat(a, b) -> a .. b
+            trimmedLine = trimmedLine.replace(/\bconcat\s*\(([^)]+)\)/gi, (match, args) => {
+                const parts = smartSplitArgs(args);
+                if (parts.length === 2) {
+                    return `${parts[0].trim()} .. ${parts[1].trim()}`;
+                }
+                return match; // Si pas exactement 2 args, on laisse tel quel
+            });
+
+            // 3. ième(s, i) -> string.sub(s, i, i)
+            trimmedLine = trimmedLine.replace(/\bième\s*\(([^)]+)\)/gi, (match, args) => {
+                const parts = smartSplitArgs(args);
+                if (parts.length === 2) {
+                    const str = parts[0].trim();
+                    const idx = parts[1].trim();
+                    return `string.sub(${str}, ${idx}, ${idx})`;
+                }
+                return match;
+            });
+
+            // 4. souschaîne(s, i, j) -> string.sub(s, i, j)
+            trimmedLine = trimmedLine.replace(/\bsouschaîne\s*\(([^)]+)\)/gi, (match, args) => {
+                const parts = smartSplitArgs(args);
+                if (parts.length === 3) {
+                    return `string.sub(${parts[0].trim()}, ${parts[1].trim()}, ${parts[2].trim()})`;
+                }
+                return match;
+            });
+
+            // ========== FONCTIONS CONSTRUCTEURS POUR TYPES DE DONNÉES ==========
+            // Syntaxes explicites pour créer chaque type de structure
+
+            // 1. liste(a, b, c) → __psc_liste_from_table({a, b, c})
+            trimmedLine = trimmedLine.replace(/\bliste\s*\(([^)]*)\)/gi, (match, args) => {
+                const closePos = findMatchingParen(match, match.indexOf('('));
+                if (closePos !== -1) {
+                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
+                    return `__psc_liste_from_table({${innerArgs}})`;
+                }
+                return `__psc_liste_from_table({${args}})`;
+            });
+
+            // 2. listeSym(a, b, c) → __psc_listesym_from_table({a, b, c})
+            trimmedLine = trimmedLine.replace(/\blisteSym\s*\(([^)]*)\)/gi, (match, args) => {
+                const closePos = findMatchingParen(match, match.indexOf('('));
+                if (closePos !== -1) {
+                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
+                    return `__psc_listesym_from_table({${innerArgs}})`;
+                }
+                return `__psc_listesym_from_table({${args}})`;
+            });
+
+            // 3. pile(a, b, c) → pile avec éléments initiaux
+            trimmedLine = trimmedLine.replace(/\bpile\s*\(([^)]*)\)/gi, (match, args) => {
+                if (args.trim() === '') {
+                    return '__psc_pile_vide()';
+                }
+                return `__psc_pile_from_values({${args}})`;
+            });
+
+            // 4. file(a, b, c) → file avec éléments initiaux
+            trimmedLine = trimmedLine.replace(/\bfile\s*\(([^)]*)\)/gi, (match, args) => {
+                if (args.trim() === '') {
+                    return '__psc_file_vide()';
+                }
+                return `__psc_file_from_values({${args}})`;
+            });
+
+            // 5. Table("Alice" → "1234", "Bob" → "5678") → table avec paires clé-valeur
+            trimmedLine = trimmedLine.replace(/\bTable\s*\(([^)]+)\)/gi, (match, args) => {
+                // Remplacer les flèches → par des virgules pour séparer clés et valeurs
+                const normalizedArgs = args.replace(/\s*→\s*/g, ', ');
+                return `__psc_table_from_pairs(${normalizedArgs})`;
+            });
+
             // Appliquer le mapping des fonctions PSC -> helpers Lua (incluant TDA Liste)
             // On trie par longueur décroissante pour éviter qu'un préfixe remplace un nom plus long
             const sortedFunctions = [...PSC_DEFINITIONS.functions].sort((a, b) => b.name.length - a.name.length);
@@ -342,8 +430,41 @@ export function transpileToLua(pscCode: string): string {
             }
 
             // Remplacements spécifiques pour les opérateurs et mots-clés
+            // Remplacements spécifiques pour les opérateurs et mots-clés
+
+            // Traitement spécifique de 'retourner' pour inclure les paramètres InOut
+            if (/^\s*retourne(?:r)?\b/i.test(trimmedLine)) {
+                const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : null;
+                let inOutSuffix = '';
+                if (currentFunc && currentFunc.inOutParamNames.length > 0) {
+                    inOutSuffix = ', ' + currentFunc.inOutParamNames.join(', ');
+                }
+
+                if (/^\s*retourne(?:r)?\s*\(/i.test(trimmedLine)) {
+                    // retourner(val) -> return val, inOut...
+                    trimmedLine = trimmedLine.replace(/^\s*retourne(?:r)?\s*\((.*)\)/i, (m, val) => `return ${val}${inOutSuffix}`);
+                } else {
+                    // retourner val ou retourner
+                    const valMatch = /^\s*retourne(?:r)?\s+(.+)$/i.exec(trimmedLine);
+                    if (valMatch) {
+                        trimmedLine = `return ${valMatch[1]}${inOutSuffix}`;
+                    } else {
+                        // Juste retourner
+                        if (inOutSuffix) {
+                            // Si retour vide mais on a des InOut, on retourne les InOut
+                            trimmedLine = `return ${inOutSuffix.substring(2)}`; // enlever ', ' initial
+                        } else {
+                            trimmedLine = 'return';
+                        }
+                    }
+                }
+            } else {
+                // Si ce n'est pas un 'retourner', on applique le remplacement standard (au cas où)
+                trimmedLine = trimmedLine
+                    .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return');
+            }
+
             trimmedLine = trimmedLine
-                .replace(/\bretourne(?:r)?\s*\((.*)\)/gi, 'return $1').replace(/\bretourne(?:r)?\b/gi, 'return') // Cas particulier retour
                 .replace(/\bvrai\b/gi, 'true').replace(/\bfaux\b/gi, 'false')
                 .replace(/\bnon\b/gi, 'not').replace(/\bou\b/gi, 'or').replace(/\bet\b/gi, 'and')
                 .replace(/\bmod\b/gi, '%').replace(/≠/g, '~=').replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/÷/g, '//')
