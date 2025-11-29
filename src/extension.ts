@@ -44,17 +44,25 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(executeCommand);
 
     // --- NOUVELLE PARTIE : LOGIQUE DE REMPLACEMENT AUTOMATIQUE ET DIAGNOSTICS ---
+    let timeout: any;
+
     context.subscriptions.push(vscode.workspace.onDidChangeTextDocument(event => {
         // On s'assure que le document est bien du Pseudo-Code
         if (event.document.languageId !== 'psc') {
             return;
         }
 
-        // On déclenche l'analyse des erreurs à chaque modification
-        linter.refresh(event.document, diagnosticsCollection);
-
         // On exécute la logique de remplacement pour symboles (flèche, ≤, ≥, ≠)
+        // (Doit rester instantané pour l'UX)
         handleSymbolReplacement(event);
+
+        // Debounce pour le linter (éviter de re-parser tout le fichier à chaque frappe)
+        if (timeout) {
+            clearTimeout(timeout);
+        }
+        timeout = setTimeout(() => {
+            linter.refresh(event.document, diagnosticsCollection);
+        }, 500);
     }));
 }
 

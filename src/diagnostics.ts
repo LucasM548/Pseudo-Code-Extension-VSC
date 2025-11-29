@@ -13,8 +13,10 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
 
     const diagnostics: vscode.Diagnostic[] = [];
     const scopeStack: Set<string>[] = [new Set()]; // Pile de portées (global + locales)
-    const declaredFunctions = collectFunctionNames(doc);
-    const declaredCompositeTypes = collectCompositeTypeNames(doc);
+
+    // OPTIMISATION : Une seule passe pour collecter toutes les définitions globales
+    const { declaredFunctions, declaredCompositeTypes } = collectDefinitions(doc);
+
     let inBlockComment = false;
 
     for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
@@ -233,29 +235,32 @@ function checkFunctionCallsInExpression(
     }
 }
 
-function collectFunctionNames(doc: vscode.TextDocument): Set<string> {
-    const functions = new Set<string>();
-    for (let i = 0; i < doc.lineCount; i++) {
-        const line = doc.lineAt(i).text;
-        const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(line);
-        if (funcMatch) {
-            functions.add(funcMatch[1]);
-        }
-    }
-    return functions;
-}
+/**
+ * Collecte toutes les définitions (fonctions et types composites) en une seule passe
+ */
+function collectDefinitions(doc: vscode.TextDocument): { declaredFunctions: Set<string>, declaredCompositeTypes: Set<string> } {
+    const declaredFunctions = new Set<string>();
+    const declaredCompositeTypes = new Set<string>();
 
-function collectCompositeTypeNames(doc: vscode.TextDocument): Set<string> {
-    const types = new Set<string>();
     for (let i = 0; i < doc.lineCount; i++) {
         const line = doc.lineAt(i).text.trim();
+        if (!line) continue;
+
+        // Détection fonction
+        const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(line);
+        if (funcMatch) {
+            declaredFunctions.add(funcMatch[1]);
+            continue;
+        }
+
+        // Détection type composite
         const typeMatch = PATTERNS.COMPOSITE_TYPE.exec(line);
         if (typeMatch) {
-            // Ajouter le type en minuscules pour comparaison insensible à la casse
-            types.add(typeMatch[1].toLowerCase());
+            declaredCompositeTypes.add(typeMatch[1].toLowerCase());
         }
     }
-    return types;
+
+    return { declaredFunctions, declaredCompositeTypes };
 }
 
 function isKnownIdentifier(word: string): boolean {
