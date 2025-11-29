@@ -1,11 +1,6 @@
 /**
  * Transpileur Pseudo-Code vers Lua
  */
-
-
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import { PATTERNS, LUA_REPLACEMENTS, FUNCTION_MAPPING, LUA_HELPERS } from './constants';
 import { PSC_DEFINITIONS } from './definitions';
 import { normalizeType, smartSplitArgs, findMatchingParen } from './utils';
