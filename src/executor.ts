@@ -639,11 +639,6 @@ export function executeCode(document: vscode.TextDocument) {
     }
     terminal.show(true);
 
-    // Sur Windows, forcer l'encodage UTF-8 pour éviter les caractères corrompus
-    if (os.platform() === 'win32') {
-        terminal.sendText('chcp 65001 >nul', true);
-    }
-
     const command = `lua "${tempFilePath}"`;
     terminal.sendText(command, true);
 }

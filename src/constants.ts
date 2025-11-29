@@ -125,7 +125,8 @@ export const FUNCTION_MAPPING: Record<string, string> = Object.fromEntries(
 );
 
 // Helpers Lua
-export const LUA_HELPERS = `local __psc_file_handles = {}
+export const LUA_HELPERS = `if package.config:sub(1,1) == "\\\\" then os.execute("chcp 65001 >nul") end
+local __psc_file_handles = {}
 local __psc_file_current_handle = 1
 
 local function __psc_fichierCreer(nomFichier)
