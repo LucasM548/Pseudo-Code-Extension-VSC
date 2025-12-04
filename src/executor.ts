@@ -12,6 +12,48 @@ import { normalizeType, smartSplitArgs, findMatchingParen } from './utils';
 import { FunctionRegistry } from './functionRegistry';
 import { CompositeTypeRegistry } from './compositeTypes';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGEX PRÉ-COMPILÉES (éviter la recompilation à chaque ligne)
+// ═══════════════════════════════════════════════════════════════════════════════
+const REGEX_BUILTIN_TYPES = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym)$/i;
+const REGEX_INOUT = /\bInOut\b/i;
+const REGEX_TYPE_NAME = /^([\p{L}0-9_]+)/iu;
+const REGEX_BLOCK_COMMENT = /\/\*[\s\S]*?\*\//g;
+const REGEX_LEXIQUE_BLOCK = /Lexique\s*:?[\s\S]*?(?=\n\s*(?:Début|Fonction|Algorithme|$))/i;
+const REGEX_SMART_QUOTES = /[""]/g;
+const REGEX_ALGORITHM = /^\s*algorithme\b/i;
+const REGEX_FIN = /^\s*Fin\b/i;
+const REGEX_DEBUT_OR_LEXIQUE = /^\s*(Début|Lexique)\b/i;
+const REGEX_CLOSING_BLOCKS = /^\s*(Fin|fsi|fpour|ftq|ftant)\b/i;
+const REGEX_LIRE_ASSIGNMENT = /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu;
+const REGEX_FONCTION = /^\s*fonction\s/i;
+const REGEX_FONCTION_NAME = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)/iu;
+const REGEX_POUR_LOOP = /^\s*Pour\s/i;
+const REGEX_POUR_TABLE_ITER = /^\s*Pour\s+([^\s]+)\s+de\s+([^\s]+)\s+Faire\s*:?$/i;
+const REGEX_POUR_CLASSIC = /^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu;
+const REGEX_DECROISSANT = /\bdécroissant\b/i;
+const REGEX_TANT_QUE = /^\s*Tant que\b/i;
+const REGEX_FAIRE = /\s+Faire\s*:?/i;
+const REGEX_SI = /^\s*Si\b/i;
+const REGEX_SINON_SI = /^\s*Sinon\s+si\b/i;
+const REGEX_SINON = /^\s*Sinon\b\s*:?/i;
+const REGEX_ALORS_FAIRE = /\s+(Alors|Faire)\s*:?/i;
+const REGEX_ECRIRE = /^écrire\(/i;
+const REGEX_RETOURNER = /^\s*retourne(?:r)?\b/i;
+const REGEX_RETOURNER_PAREN = /^\s*retourne(?:r)?\s*\(/i;
+const REGEX_RETOURNER_VALUE = /^\s*retourne(?:r)?\s+(.+)$/i;
+const REGEX_RETURN_LINE = /^\s*return\b/i;
+const REGEX_IF_CONDITION = /^(\s*if\s+)(.*?)(\s+then\s*:?)\s*$/i;
+const REGEX_ELSEIF_CONDITION = /^(\s*elseif\s+)(.*?)(\s+then\s*:?)\s*$/i;
+const REGEX_WHILE_CONDITION = /^(\s*while\s+)(.*?)(\s+do\s*:?)\s*$/i;
+const REGEX_ARRAY_DECL = /^\s*([\p{L}_][\p{L}0-9_]*)\s*(?:=|←)\s*tableau\s+[\p{L}_][\p{L}0-9_]*\s*\[([^\]]+)\]\s*$/iu;
+const REGEX_INDENTATION = /^\s*/;
+const REGEX_MULTI_INDEX = /([\p{L}0-9_]+)\s*\[([^\]]+)\]/gu;
+const REGEX_MULTI_BRACKET = /([\p{L}0-9_]+)\s*((?:\[[^\]]+\])+)/gu;
+const REGEX_BRACKET_EXTRACT = /\[([^\]]+)\]/g;
+const REGEX_ARRAY_LITERAL = /(?:(?<=^)|(?<=[\s=,(;:]))\[([^\]]*)\]/gu;
+
+
 /**
  * Collecte les types de variables déclarées dans le code
  */
@@ -26,7 +68,7 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
         const declarationMatch = PATTERNS.VARIABLE_DECLARATION.exec(trimmedLine);
         if (declarationMatch && !PATTERNS.FUNCTION_DECLARATION.test(trimmedLine)) {
             const rawType = declarationMatch[2];
-            const type = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym)$/i.test(rawType)
+            const type = REGEX_BUILTIN_TYPES.test(rawType)
                 ? normalizeType(rawType)
                 : rawType;
             const varNames = declarationMatch[1].split(',').map(v => v.trim());
@@ -62,12 +104,12 @@ function collectVariableTypes(pscCode: string): Map<string, string> {
             params.forEach(p => {
                 const parts = p.split(':').map(part => part.trim());
                 if (parts.length === 2) {
-                    const varName = parts[0].replace(/\bInOut\b/i, '').trim();
+                    const varName = parts[0].replace(REGEX_INOUT, '').trim();
                     const rawTypeName = parts[1];
-                    const typeMatch = rawTypeName.match(/^([\p{L}0-9_]+)/iu);
+                    const typeMatch = rawTypeName.match(REGEX_TYPE_NAME);
                     if (typeMatch) {
                         const typeName = typeMatch[1];
-                        const finalType = /^(entier|réel|booléen|booleen|chaîne|chaine|caractère|caractere|tableau|liste|pile|file|listesym)$/i.test(typeName)
+                        const finalType = REGEX_BUILTIN_TYPES.test(typeName)
                             ? normalizeType(typeName)
                             : typeName;
                         if (varName) variableTypes.set(varName, finalType);
@@ -93,11 +135,8 @@ export function transpileToLua(pscCode: string): string {
 
     const variableTypes = collectVariableTypes(pscCode);
 
-    // Nettoyer les commentaires blocs avant de traiter le code
-    // On remplace les commentaires blocs par des lignes vides pour préserver les numéros de lignes
-    let cleanedCode = pscCode.replace(/\/\*[\s\S]*?\*\//g, '');
-    // Supprimer aussi le bloc Lexique
-    cleanedCode = cleanedCode.replace(/Lexique\s*:?[\s\S]*?(?=\n\s*(?:Début|Fonction|Algorithme|$))/i, '');
+    let cleanedCode = pscCode.replace(REGEX_BLOCK_COMMENT, '');
+    cleanedCode = cleanedCode.replace(REGEX_LEXIQUE_BLOCK, '');
 
     let luaCode = '';
     const lines = cleanedCode.split('\n');
@@ -204,18 +243,18 @@ export function transpileToLua(pscCode: string): string {
         // Ignorer les lignes vides et les lignes qui ne contiennent que des caractères de ponctuation résiduels
         if (trimmedLine === '' || /^[\/\*\s]*$/.test(trimmedLine)) continue;
 
-        if (/^\s*algorithme\b/i.test(trimmedLine)) { isInsideAlgorithmBlock = true; continue; }
+        if (REGEX_ALGORITHM.test(trimmedLine)) { isInsideAlgorithmBlock = true; continue; }
         if (isInsideAlgorithmBlock) {
-            if (/^\s*Fin\b/i.test(trimmedLine)) isInsideAlgorithmBlock = false;
+            if (REGEX_FIN.test(trimmedLine)) isInsideAlgorithmBlock = false;
             continue;
         }
-        if (/^\s*Début\b/i.test(trimmedLine) || /^\s*Lexique\b/i.test(trimmedLine)) continue;
+        if (REGEX_DEBUT_OR_LEXIQUE.test(trimmedLine)) continue;
 
         // Ignorer les déclarations de types composites
         if (PATTERNS.COMPOSITE_TYPE.test(trimmedLine)) continue;
 
         // Transformer les déclarations de tableaux en initialisation Lua
-        const arrayDecl = /^\s*([\p{L}_][\p{L}0-9_]*)\s*(?:=|←)\s*tableau\s+[\p{L}_][\p{L}0-9_]*\s*\[([^\]]+)\]\s*$/iu.exec(trimmedLine);
+        const arrayDecl = REGEX_ARRAY_DECL.exec(trimmedLine);
         if (arrayDecl) {
             const varName = arrayDecl[1];
             const dimsStr = arrayDecl[2];
@@ -227,7 +266,7 @@ export function transpileToLua(pscCode: string): string {
                 return { lo: '0', hi: d.trim() };
             });
 
-            const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+            const indentation = originalLineForIndentation.match(REGEX_INDENTATION)?.[0] || '';
             let block = `${indentation}${varName} = {}` + '\n';
 
             // Créer des boucles pour dimensions-1 pour instancier les sous-tables
@@ -254,15 +293,15 @@ export function transpileToLua(pscCode: string): string {
             continue;
         }
 
-        if (/^\s*(Fin|fsi|fpour|ftq|ftant)\b/i.test(trimmedLine)) {
-            const isFunctionEnd = functionStack.length > 0 && /^\s*Fin\b/i.test(trimmedLine);
+        if (REGEX_CLOSING_BLOCKS.test(trimmedLine)) {
+            const isFunctionEnd = functionStack.length > 0 && REGEX_FIN.test(trimmedLine);
             if (isFunctionEnd) {
                 const funcInfo = functionStack.pop();
                 if (funcInfo && funcInfo.inOutParamNames.length > 0) {
                     // Vérifier si la dernière instruction n'était pas déjà un retour
                     const lastLine = luaCode.trim().split('\n').pop() || '';
-                    if (!/^\s*return\b/.test(lastLine)) {
-                        const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+                    if (!REGEX_RETURN_LINE.test(lastLine)) {
+                        const indentation = originalLineForIndentation.match(REGEX_INDENTATION)?.[0] || '';
                         luaCode += `${indentation}\treturn ${funcInfo.inOutParamNames.join(', ')}\n`;
                     }
                 }
@@ -270,7 +309,7 @@ export function transpileToLua(pscCode: string): string {
             trimmedLine = 'end';
             lineIsFullyProcessed = true;
         }
-        if (!lineIsFullyProcessed && /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu.test(trimmedLine)) {
+        if (!lineIsFullyProcessed && REGEX_LIRE_ASSIGNMENT.test(trimmedLine)) {
             const varName = trimmedLine.split('←')[0].trim();
             // __psc_lire() gère automatiquement la conversion en nombre si possible
             trimmedLine = `${varName} = __psc_lire()`;
@@ -279,10 +318,10 @@ export function transpileToLua(pscCode: string): string {
 
         if (!lineIsFullyProcessed) {
             let isForLoop = false;
-            trimmedLine = trimmedLine.replace(/[“”]/g, '"');
+            trimmedLine = trimmedLine.replace(REGEX_SMART_QUOTES, '"');
 
-            if (/^\s*fonction\s/i.test(trimmedLine)) {
-                const funcNameMatch = /^\s*Fonction\s+([\p{L}_][\p{L}0-9_]*)/iu.exec(trimmedLine);
+            if (REGEX_FONCTION.test(trimmedLine)) {
+                const funcNameMatch = REGEX_FONCTION_NAME.exec(trimmedLine);
                 if (funcNameMatch && functionRegistry.has(funcNameMatch[1])) {
                     const funcInfo = functionRegistry.get(funcNameMatch[1])!;
                     functionStack.push(funcInfo);
@@ -318,28 +357,27 @@ export function transpileToLua(pscCode: string): string {
             }
 
             if (!lineIsFullyProcessed) {
-                if (/^\s*Pour\s/i.test(trimmedLine)) {
-                    // Vérifier si c'est une boucle d'itération sur table: "Pour cle de table Faire"
-                    const tableIterMatch = /^\s*Pour\s+([^\s]+)\s+de\s+([^\s]+)\s+Faire\s*:?$/i.exec(trimmedLine);
+                if (REGEX_POUR_LOOP.test(trimmedLine)) {
+                    // Vérifier si c'est une boucle d'itération sur table
+                    const tableIterMatch = REGEX_POUR_TABLE_ITER.exec(trimmedLine);
                     if (tableIterMatch) {
                         const iterVar = tableIterMatch[1];
                         const tableVar = tableIterMatch[2];
-                        // Générer une boucle Lua qui itère sur les clés de la table
                         trimmedLine = `for ${iterVar}, _ in pairs(${tableVar}._data) do`;
                     } else {
-                        // Boucle classique (allant de ... à ...)
+                        // Boucle classique
                         isForLoop = true;
-                        let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
-                        trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                        let step = REGEX_DECROISSANT.test(trimmedLine) ? ', -1' : ', 1';
+                        trimmedLine = trimmedLine.replace(REGEX_DECROISSANT, '').replace(REGEX_POUR_CLASSIC, `for $1 = $2, $3${step} do`);
                     }
-                } else if (/^\s*Tant que\b/i.test(trimmedLine)) {
-                    trimmedLine = trimmedLine.replace(/^\s*Tant que\b/i, 'while').replace(/\s+Faire\s*:?/i, ' do');
-                } else if (/^\s*Si\b/i.test(trimmedLine)) {
-                    trimmedLine = trimmedLine.replace(/^\s*Si\b/i, 'if').replace(/\s+(Alors|Faire)\s*:?/i, ' then');
-                } else if (/^\s*Sinon\s+si\b/i.test(trimmedLine)) {
-                    trimmedLine = trimmedLine.replace(/^\s*Sinon\s+si\b/i, 'elseif').replace(/\s+(Alors|Faire)\s*:?/i, ' then');
-                } else if (/^\s*Sinon\b/i.test(trimmedLine)) {
-                    trimmedLine = trimmedLine.replace(/^\s*Sinon\b\s*:?/i, 'else');
+                } else if (REGEX_TANT_QUE.test(trimmedLine)) {
+                    trimmedLine = trimmedLine.replace(REGEX_TANT_QUE, 'while').replace(REGEX_FAIRE, ' do');
+                } else if (REGEX_SI.test(trimmedLine)) {
+                    trimmedLine = trimmedLine.replace(REGEX_SI, 'if').replace(REGEX_ALORS_FAIRE, ' then');
+                } else if (REGEX_SINON_SI.test(trimmedLine)) {
+                    trimmedLine = trimmedLine.replace(REGEX_SINON_SI, 'elseif').replace(REGEX_ALORS_FAIRE, ' then');
+                } else if (REGEX_SINON.test(trimmedLine)) {
+                    trimmedLine = trimmedLine.replace(REGEX_SINON, 'else');
                 }
             }
 
@@ -493,19 +531,19 @@ export function transpileToLua(pscCode: string): string {
             // Remplacements spécifiques pour les opérateurs et mots-clés
 
             // Traitement spécifique de 'retourner' pour inclure les paramètres InOut
-            if (/^\s*retourne(?:r)?\b/i.test(trimmedLine)) {
+            if (REGEX_RETOURNER.test(trimmedLine)) {
                 const currentFunc = functionStack.length > 0 ? functionStack[functionStack.length - 1] : null;
                 let inOutSuffix = '';
                 if (currentFunc && currentFunc.inOutParamNames.length > 0) {
                     inOutSuffix = ', ' + currentFunc.inOutParamNames.join(', ');
                 }
 
-                if (/^\s*retourne(?:r)?\s*\(/i.test(trimmedLine)) {
+                if (REGEX_RETOURNER_PAREN.test(trimmedLine)) {
                     // retourner(val) -> return val, inOut...
                     trimmedLine = trimmedLine.replace(/^\s*retourne(?:r)?\s*\((.*)\)/i, (m, val) => `return ${val}${inOutSuffix}`);
                 } else {
                     // retourner val ou retourner
-                    const valMatch = /^\s*retourne(?:r)?\s+(.+)$/i.exec(trimmedLine);
+                    const valMatch = REGEX_RETOURNER_VALUE.exec(trimmedLine);
                     if (valMatch) {
                         trimmedLine = `return ${valMatch[1]}${inOutSuffix}`;
                     } else {
@@ -533,22 +571,22 @@ export function transpileToLua(pscCode: string): string {
             if (!isForLoop && !lineIsFullyProcessed) {
                 const conditionEq = (s: string) => s.replace(/(^|[^<>=~])=(?!=)/g, '$1==');
                 let handledCondition = false;
-                // Cibler uniquement les conditions if/elseif/while
-                trimmedLine = trimmedLine.replace(/^(\s*if\s+)(.*?)(\s+then\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                // Cibler uniquement les conditions if/elseif/while (regex pré-compilées)
+                trimmedLine = trimmedLine.replace(REGEX_IF_CONDITION, (_m, p1, cond, p3) => {
                     handledCondition = true;
                     return `${p1}${conditionEq(cond)}${p3}`;
                 });
-                trimmedLine = trimmedLine.replace(/^(\s*elseif\s+)(.*?)(\s+then\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                trimmedLine = trimmedLine.replace(REGEX_ELSEIF_CONDITION, (_m, p1, cond, p3) => {
                     handledCondition = true;
                     return `${p1}${conditionEq(cond)}${p3}`;
                 });
-                trimmedLine = trimmedLine.replace(/^(\s*while\s+)(.*?)(\s+do\s*:?)\s*$/i, (_m, p1, cond, p3) => {
+                trimmedLine = trimmedLine.replace(REGEX_WHILE_CONDITION, (_m, p1, cond, p3) => {
                     handledCondition = true;
                     return `${p1}${conditionEq(cond)}${p3}`;
                 });
 
                 if (!handledCondition) {
-                    const isReturnLine = /^\s*return\b/i.test(trimmedLine);
+                    const isReturnLine = REGEX_RETURN_LINE.test(trimmedLine);
                     const parts = trimmedLine.split(/(__PSC_TABLE_START__|__PSC_TABLE_END__)/g);
                     for (let i = 0; i < parts.length; i += 4) {
                         if (isReturnLine) {
@@ -575,7 +613,8 @@ export function transpileToLua(pscCode: string): string {
             trimmedLine = trimmedLine.replace(/__PSC_TABLE_START__/g, '').replace(/__PSC_TABLE_END__/g, '');
 
             // 0) Étendre les indices séparés par des virgules: a[i, j] -> a[i][j]
-            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\s*\[([^\]]+)\]/gu, (m, name, inside) => {
+            REGEX_MULTI_INDEX.lastIndex = 0;
+            trimmedLine = trimmedLine.replace(REGEX_MULTI_INDEX, (m, name, inside) => {
                 const indices = smartSplitArgs(inside);
                 if (indices.length > 1) {
                     return name + indices.map(id => `[${id}]`).join('');
@@ -584,11 +623,12 @@ export function transpileToLua(pscCode: string): string {
             });
 
             // 1) Convertir les accès multidimensionnels: a[i][j] -> a[(i)+1][(j)+1]
-            trimmedLine = trimmedLine.replace(/([\p{L}0-9_]+)\s*((?:\[[^\]]+\])+)/gu, (m, name, brackets) => {
+            REGEX_MULTI_BRACKET.lastIndex = 0;
+            trimmedLine = trimmedLine.replace(REGEX_MULTI_BRACKET, (m, name, brackets) => {
                 const parts: string[] = [];
-                const re = /\[([^\]]+)\]/g;
+                REGEX_BRACKET_EXTRACT.lastIndex = 0;
                 let mm: RegExpExecArray | null;
-                while ((mm = re.exec(brackets)) !== null) {
+                while ((mm = REGEX_BRACKET_EXTRACT.exec(brackets)) !== null) {
                     const expr = (mm[1] || '').trim();
                     const indices = smartSplitArgs(expr);
                     if (indices.length > 1) {
@@ -604,16 +644,16 @@ export function transpileToLua(pscCode: string): string {
             });
 
             // 2) Convertir uniquement les littéraux de tableaux: [1,2] -> {1,2}
-            //    Ne pas convertir les index résiduels comme "][p]" : restriction sur le caractère précédent
-            trimmedLine = trimmedLine.replace(/(?:(?<=^)|(?<=[\s=,(;:]))\[([^\]]*)\]/gu, '{$1}');
+            REGEX_ARRAY_LITERAL.lastIndex = 0;
+            trimmedLine = trimmedLine.replace(REGEX_ARRAY_LITERAL, '{$1}');
         }
 
-        if (trimmedLine.match(/^écrire\(/i)) {
+        if (REGEX_ECRIRE.test(trimmedLine)) {
             const openParenIndex = trimmedLine.indexOf('(');
             trimmedLine = '__psc_write' + trimmedLine.substring(openParenIndex);
         }
 
-        const indentation = originalLineForIndentation.match(/^\s*/)?.[0] || '';
+        const indentation = originalLineForIndentation.match(REGEX_INDENTATION)?.[0] || '';
         const finalComment = commentPart ? ' ' + commentPart.trim() : '';
         luaCode += indentation + trimmedLine + finalComment + '\n';
     }

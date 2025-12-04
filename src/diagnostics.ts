@@ -2,24 +2,60 @@ import * as vscode from 'vscode';
 import { KNOWN_IDENTIFIERS, PATTERNS, BUILTIN_FUNCTION_ARITY } from './constants';
 import { cleanLineFromComments, maskStrings, maskFieldAccess, smartSplitArgs, findMatchingParen } from './utils';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGEX PRÉ-COMPILÉES (éviter la recompilation à chaque ligne)
+// ═══════════════════════════════════════════════════════════════════════════════
+const REGEX_POUR_LOOP = /^\s*Pour\s+([\p{L}_][\p{L}0-9_]*)/iu;
+const REGEX_PARAM_SPLIT = /,(?![^(\[]*[)\]])/g;
+const REGEX_INOUT = /\bInOut\b/i;
+const REGEX_IDENTIFIER_START = /^([\p{L}_][\p{L}0-9_]*)/u;
+const REGEX_NUMBER = /^\d+(\.\d+)?$/;
+const REGEX_IDENT_CHAR = /[\p{L}_]/u;
+const REGEX_IDENT_CHAR_FULL = /[\p{L}0-9_]/u;
+const REGEX_IDENTIFIER_EXTRACT = /^[\p{L}_][\p{L}0-9_]*/u;
+const REGEX_WHITESPACE = /\s/;
+
+// Cache pour les identifiants connus en minuscules (optimisation lookup)
+const KNOWN_IDENTIFIERS_LOWER = new Set([...KNOWN_IDENTIFIERS].map(id => id.toLowerCase()));
+
 /**
  * Cœur du Linter avec gestion de la portée lexicale et déclaration implicite.
  */
 export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.DiagnosticCollection): void {
-
     if (doc.languageId !== 'psc') {
         return;
     }
 
     const diagnostics: vscode.Diagnostic[] = [];
-    const scopeStack: Set<string>[] = [new Set()]; // Pile de portées (global + locales)
+    const scopeStack: Set<string>[] = [new Set()];
 
-    // OPTIMISATION : Une seule passe pour collecter toutes les définitions globales
-    const { declaredFunctions, declaredCompositeTypes } = collectDefinitions(doc);
+    const declaredFunctions = new Set<string>();
+    const declaredCompositeTypes = new Set<string>();
+
+    const lineCount = doc.lineCount;
+    for (let i = 0; i < lineCount; i++) {
+        const lineText = doc.lineAt(i).text;
+        const trimmed = lineText.trim();
+        if (!trimmed) continue;
+
+        // Détection fonction (regex pré-compilée)
+        const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(trimmed);
+        if (funcMatch) {
+            declaredFunctions.add(funcMatch[1]);
+            continue;
+        }
+
+        // Détection type composite
+        const typeMatch = PATTERNS.COMPOSITE_TYPE.exec(trimmed);
+        if (typeMatch) {
+            declaredCompositeTypes.add(typeMatch[1].toLowerCase());
+        }
+    }
 
     let inBlockComment = false;
 
-    for (let lineIndex = 0; lineIndex < doc.lineCount; lineIndex++) {
+    // Deuxième passe: analyse avec contexte de portées
+    for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
         const line = doc.lineAt(lineIndex);
         const nonCommentText = cleanLineFromComments(line.text, inBlockComment);
         const trimmedText = nonCommentText.text.trim();
@@ -32,43 +68,41 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
 
         const isOpeningBlock = PATTERNS.OPENING_BLOCK.test(trimmedText);
         const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(trimmedText);
-        const pourMatch = /^\s*Pour\s+([\p{L}_][\p{L}0-9_]*)/iu.exec(trimmedText);
+        const pourMatch = REGEX_POUR_LOOP.exec(trimmedText);
 
         if (isOpeningBlock || funcMatch || pourMatch) {
             const newScope = new Set<string>();
             if (funcMatch) {
                 let paramsString = funcMatch[2];
 
-                // Trouver la position de la parenthèse fermante qui correspond à l'ouverture
-                // pour séparer les paramètres du type de retour
+                // Trouver la parenthèse fermante
                 let depth = 0;
                 let endOfParams = -1;
-                for (let i = 0; i < paramsString.length; i++) {
-                    if (paramsString[i] === '(') depth++;
-                    else if (paramsString[i] === ')') {
-                        depth--;
-                        if (depth < 0) {
+                const len = paramsString.length;
+                for (let i = 0; i < len; i++) {
+                    const c = paramsString[i];
+                    if (c === '(') depth++;
+                    else if (c === ')') {
+                        if (--depth < 0) {
                             endOfParams = i;
                             break;
                         }
                     }
                 }
 
-                // Si on a trouvé une parenthèse fermante, on ne prend que ce qui est avant
                 if (endOfParams !== -1) {
                     paramsString = paramsString.substring(0, endOfParams);
                 }
 
-                // Extraire seulement les NOMS de paramètres, pas les types
-                const params = paramsString.split(/,(?![^(\[]*[)\]])/g);
-                params.forEach(p => {
-                    // Format: nom : type ou InOut nom : type
+                // Extraire les noms de paramètres
+                const params = paramsString.split(REGEX_PARAM_SPLIT);
+                for (const p of params) {
                     const paramParts = p.trim().split(':');
                     if (paramParts.length >= 1) {
-                        const varName = paramParts[0].replace(/\bInOut\b/i, '').trim();
+                        const varName = paramParts[0].replace(REGEX_INOUT, '').trim();
                         if (varName) newScope.add(varName);
                     }
-                });
+                }
             }
             if (pourMatch) {
                 newScope.add(pourMatch[1]);
@@ -80,28 +114,30 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
         const assignmentIndex = trimmedText.indexOf('←');
 
         if (declarationMatch && !PATTERNS.FUNCTION_DECLARATION.test(trimmedText)) {
-            const varNames = declarationMatch[1].split(',').map(v => v.trim());
+            const varNames = declarationMatch[1].split(',');
             const currentScope = scopeStack[scopeStack.length - 1];
-            varNames.forEach(v => { if (v) currentScope.add(v); });
+            for (const v of varNames) {
+                const trimmed = v.trim();
+                if (trimmed) currentScope.add(trimmed);
+            }
         } else if (assignmentIndex !== -1) {
             const lhsText = trimmedText.substring(0, assignmentIndex).trim();
             const rhsText = trimmedText.substring(assignmentIndex + 1).trim();
             checkVariablesInExpression(rhsText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
             checkFunctionCallsInExpression(rhsText, declaredFunctions, declaredCompositeTypes, line, diagnostics);
-            const lhsVarMatch = lhsText.match(/^([\p{L}_][\p{L}0-9_]*)/u);
+
+            const lhsVarMatch = REGEX_IDENTIFIER_START.exec(lhsText);
             if (lhsVarMatch) {
-                const lhsVar = lhsVarMatch[1];
-                scopeStack[scopeStack.length - 1].add(lhsVar);
+                scopeStack[scopeStack.length - 1].add(lhsVarMatch[1]);
+                const lhsIndexVars = lhsText.substring(lhsVarMatch[0].length);
+                checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
             }
-            const lhsIndexVars = lhsText.substring(lhsVarMatch ? lhsVarMatch[0].length : 0);
-            checkVariablesInExpression(lhsIndexVars, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         } else {
             checkVariablesInExpression(trimmedText, scopeStack, declaredFunctions, declaredCompositeTypes, line, diagnostics);
             checkFunctionCallsInExpression(trimmedText, declaredFunctions, declaredCompositeTypes, line, diagnostics);
         }
 
-        const isClosingBlock = PATTERNS.CLOSING_KEYWORDS.test(trimmedText);
-        if (isClosingBlock && scopeStack.length > 1) {
+        if (PATTERNS.CLOSING_KEYWORDS.test(trimmedText) && scopeStack.length > 1) {
             scopeStack.pop();
         }
     }
@@ -111,7 +147,7 @@ export function refreshDiagnostics(doc: vscode.TextDocument, collection: vscode.
 
 /**
  * Vérifie tous les identifiants dans une expression donnée.
- * Crée des diagnostics à la position exacte si un identifiant n'est pas déclaré.
+ * OPTIMISÉ: Utilise des regex pré-compilées et des lookups Set.
  */
 function checkVariablesInExpression(
     expression: string,
@@ -127,20 +163,24 @@ function checkVariablesInExpression(
 
     const regex = PATTERNS.WORD_BOUNDARY_IDENTIFIER;
 
-    // Calculer le décalage entre le texte original de la ligne et l'expression analysée
     const expressionOffsetInLine = line.text.indexOf(expression);
-    if (expressionOffsetInLine === -1) return; // Sécurité si l'expression n'est pas trouvée
+    if (expressionOffsetInLine === -1) return;
 
     let match;
     while ((match = regex.exec(textToCheck)) !== null) {
         const variable = match[0];
         const indexInExpression = match.index;
+        const lowerVar = variable.toLowerCase();
 
-        // Comparaison insensible à la casse pour les types composites
-        if (isKnownIdentifier(variable) || declaredFunctions.has(variable) || declaredCompositeTypes.has(variable.toLowerCase()) || /^\d+(\.\d+)?$/.test(variable)) {
+        // OPTIMISÉ: Vérifications avec Sets pré-calculés
+        if (KNOWN_IDENTIFIERS_LOWER.has(lowerVar) ||
+            declaredFunctions.has(variable) ||
+            declaredCompositeTypes.has(lowerVar) ||
+            REGEX_NUMBER.test(variable)) {
             continue;
         }
 
+        // Recherche dans les portées (du plus local au plus global)
         let isDeclared = false;
         for (let i = scopeStack.length - 1; i >= 0; i--) {
             if (scopeStack[i].has(variable)) {
@@ -150,13 +190,17 @@ function checkVariablesInExpression(
         }
 
         if (!isDeclared) {
-            // Calculer la position finale et précise de l'erreur
             const finalColumn = expressionOffsetInLine + indexInExpression;
             const range = new vscode.Range(line.lineNumber, finalColumn, line.lineNumber, finalColumn + variable.length);
             diagnostics.push(new vscode.Diagnostic(range, `L'identifiant '${variable}' est utilisé avant d'avoir reçu une valeur.`, vscode.DiagnosticSeverity.Error));
         }
     }
 }
+
+/**
+ * Vérifie les appels de fonction dans une expression.
+ * OPTIMISÉ: Parsing manuel plus efficace que des regex répétées.
+ */
 function checkFunctionCallsInExpression(
     expression: string,
     declaredFunctions: Set<string>,
@@ -164,43 +208,40 @@ function checkFunctionCallsInExpression(
     line: vscode.TextLine,
     diagnostics: vscode.Diagnostic[]
 ): void {
-    // Masquer les strings et les accès aux champs pour éviter les faux positifs
     let masked = maskStrings(expression);
     masked = maskFieldAccess(masked);
 
-    // Calculer le décalage de l'expression dans la ligne pour les diagnostics précis
     const expressionOffsetInLine = line.text.indexOf(expression);
     if (expressionOffsetInLine === -1) return;
 
+    const len = masked.length;
     let i = 0;
-    while (i < masked.length) {
+
+    while (i < len) {
         const ch = masked[i];
-        // Détection du début d'identifiant en respectant une limite de mot
         const prev = i > 0 ? masked[i - 1] : ' ';
-        const isStart = /[\p{L}_]/u.test(ch) && !/[\p{L}0-9_]/u.test(prev);
-        if (!isStart) {
+
+        // Détection optimisée du début d'identifiant
+        if (!REGEX_IDENT_CHAR.test(ch) || REGEX_IDENT_CHAR_FULL.test(prev)) {
             i++;
             continue;
         }
 
-        // Extraire le nom de fonction potentiel
-        const idMatch = masked.slice(i).match(/^[\p{L}_][\p{L}0-9_]*/u);
+        const idMatch = masked.slice(i).match(REGEX_IDENTIFIER_EXTRACT);
         if (!idMatch) {
             i++;
             continue;
         }
+
         const funcName = idMatch[0];
         let j = i + funcName.length;
-        // Sauter espaces
-        while (j < masked.length && /\s/.test(masked[j])) j++;
 
-        if (j < masked.length && masked[j] === '(') {
-            // Trouver la parenthèse fermante correspondante
+        // Sauter espaces
+        while (j < len && REGEX_WHITESPACE.test(masked[j])) j++;
+
+        if (j < len && masked[j] === '(') {
             const closeIdx = findMatchingParen(masked, j);
-            if (closeIdx === -1) {
-                // Parenthèses non fermées: on arrête ici pour éviter des faux positifs
-                break;
-            }
+            if (closeIdx === -1) break;
 
             const argsStr = expression.slice(j + 1, closeIdx);
             const args = smartSplitArgs(argsStr);
@@ -218,7 +259,7 @@ function checkFunctionCallsInExpression(
                         vscode.DiagnosticSeverity.Error
                     ));
                 }
-            } else if (!declaredFunctions.has(funcName) && !KNOWN_IDENTIFIERS.has(lower) && !declaredCompositeTypes.has(lower)) {
+            } else if (!declaredFunctions.has(funcName) && !KNOWN_IDENTIFIERS_LOWER.has(lower) && !declaredCompositeTypes.has(lower)) {
                 const startCol = expressionOffsetInLine + i;
                 const range = new vscode.Range(line.lineNumber, startCol, line.lineNumber, startCol + funcName.length);
                 diagnostics.push(new vscode.Diagnostic(
@@ -232,38 +273,6 @@ function checkFunctionCallsInExpression(
             continue;
         }
 
-        i = j; // Continuer après l'identifiant si pas d'appel
+        i = j;
     }
-}
-
-/**
- * Collecte toutes les définitions (fonctions et types composites) en une seule passe
- */
-function collectDefinitions(doc: vscode.TextDocument): { declaredFunctions: Set<string>, declaredCompositeTypes: Set<string> } {
-    const declaredFunctions = new Set<string>();
-    const declaredCompositeTypes = new Set<string>();
-
-    for (let i = 0; i < doc.lineCount; i++) {
-        const line = doc.lineAt(i).text.trim();
-        if (!line) continue;
-
-        // Détection fonction
-        const funcMatch = PATTERNS.FUNCTION_DECLARATION.exec(line);
-        if (funcMatch) {
-            declaredFunctions.add(funcMatch[1]);
-            continue;
-        }
-
-        // Détection type composite
-        const typeMatch = PATTERNS.COMPOSITE_TYPE.exec(line);
-        if (typeMatch) {
-            declaredCompositeTypes.add(typeMatch[1].toLowerCase());
-        }
-    }
-
-    return { declaredFunctions, declaredCompositeTypes };
-}
-
-function isKnownIdentifier(word: string): boolean {
-    return KNOWN_IDENTIFIERS.has(word.toLowerCase());
 }

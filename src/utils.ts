@@ -4,53 +4,72 @@
 
 import { TYPE_MAPPING } from './constants';
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// REGEX PRÉ-COMPILÉES (éviter la recompilation à chaque appel)
+// ═══════════════════════════════════════════════════════════════════════════════
+const REGEX_DOUBLE_QUOTES = /"[^"]*"/g;
+const REGEX_SINGLE_QUOTES = /'(?:\\.|[^\\'])'/g;
+const REGEX_FIELD_ACCESS = /([\p{L}_][\p{L}0-9_]*)\.([\p{L}_][\p{L}0-9_]*)/gu;
+const REGEX_BRACKET_FIELD_ACCESS = /(\])\.([\p{L}_][\p{L}0-9_]*)/gu;
+const REGEX_DOT_FIELD = /\.[\p{L}_][\p{L}0-9_]*/gu;
+const REGEX_SIMPLE_IDENTIFIER = /^[\p{L}_][\p{L}0-9_]*$/u;
+const REGEX_INOUT = /\bInOut\b/i;
+
+const OPEN_BRACKETS = new Set(['(', '[', '{']);
+const CLOSE_BRACKETS = new Set([')', ']', '}']);
+
 /**
  * Normalise un type (gère les variantes avec/sans accent)
  */
 export function normalizeType(rawType: string): string {
-    const normalized = TYPE_MAPPING[rawType.toLowerCase()];
-    return normalized || rawType;
+    return TYPE_MAPPING[rawType.toLowerCase()] || rawType;
 }
 
 /**
  * Découpe intelligemment une chaîne d'arguments en tenant compte des parenthèses, crochets et quotes
  */
 export function smartSplitArgs(argsStr: string): string[] {
-    if (!argsStr.trim()) return [];
+    const trimmed = argsStr.trim();
+    if (!trimmed) return [];
 
     const args: string[] = [];
     let current = '';
     let depth = 0;
     let inString = false;
     let stringChar = '';
+    const len = argsStr.length;
 
-    for (let i = 0; i < argsStr.length; i++) {
+    for (let i = 0; i < len; i++) {
         const char = argsStr[i];
-        const prevChar = argsStr[i - 1];
 
-        if (!inString && (char === '"' || char === "'")) {
-            inString = true;
-            stringChar = char;
-            current += char;
-        } else if (inString && char === stringChar && prevChar !== '\\') {
-            inString = false;
-            current += char;
-        } else if (!inString && '([{'.includes(char)) {
-            depth++;
-            current += char;
-        } else if (!inString && ')]}'.includes(char)) {
-            depth--;
-            current += char;
-        } else if (!inString && char === ',' && depth === 0) {
-            args.push(current.trim());
-            current = '';
+        if (!inString) {
+            if (char === '"' || char === "'") {
+                inString = true;
+                stringChar = char;
+                current += char;
+            } else if (OPEN_BRACKETS.has(char)) {
+                depth++;
+                current += char;
+            } else if (CLOSE_BRACKETS.has(char)) {
+                depth--;
+                current += char;
+            } else if (char === ',' && depth === 0) {
+                args.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
         } else {
             current += char;
+            if (char === stringChar && argsStr[i - 1] !== '\\') {
+                inString = false;
+            }
         }
     }
 
-    if (current.trim()) {
-        args.push(current.trim());
+    const final = current.trim();
+    if (final) {
+        args.push(final);
     }
 
     return args;
@@ -58,14 +77,16 @@ export function smartSplitArgs(argsStr: string): string[] {
 
 /**
  * Trouve la parenthèse fermante correspondante
+ * OPTIMISÉ: Boucle simple sans regex
  */
 export function findMatchingParen(str: string, startPos: number): number {
     let depth = 1;
-    for (let i = startPos + 1; i < str.length; i++) {
-        if (str[i] === '(') depth++;
-        else if (str[i] === ')') {
-            depth--;
-            if (depth === 0) return i;
+    const len = str.length;
+    for (let i = startPos + 1; i < len; i++) {
+        const c = str[i];
+        if (c === '(') depth++;
+        else if (c === ')') {
+            if (--depth === 0) return i;
         }
     }
     return -1;
@@ -73,12 +94,13 @@ export function findMatchingParen(str: string, startPos: number): number {
 
 /**
  * Nettoie une ligne des commentaires
+ * OPTIMISÉ: Algorithme simplifié avec indexOf
  */
 export function cleanLineFromComments(lineText: string, initialInBlockComment: boolean): { text: string; inBlockComment: boolean } {
-    let nonCommentText = '';
     let currentIndex = 0;
     let inBlockComment = initialInBlockComment;
 
+    // Gestion du commentaire bloc en cours
     if (inBlockComment) {
         const endCommentIndex = lineText.indexOf('*/');
         if (endCommentIndex !== -1) {
@@ -89,63 +111,84 @@ export function cleanLineFromComments(lineText: string, initialInBlockComment: b
         }
     }
 
-    while (currentIndex < lineText.length) {
-        const startBlockIndex = lineText.indexOf('/*', currentIndex);
-        const startLineIndex = lineText.indexOf('//', currentIndex);
+    // Cas simple: pas de commentaire dans la ligne restante
+    const startBlockIndex = lineText.indexOf('/*', currentIndex);
+    const startLineIndex = lineText.indexOf('//', currentIndex);
 
-        if (startBlockIndex !== -1 && (startLineIndex === -1 || startBlockIndex < startLineIndex)) {
-            nonCommentText += lineText.substring(currentIndex, startBlockIndex);
-            const endBlockIndex = lineText.indexOf('*/', startBlockIndex + 2);
-            if (endBlockIndex !== -1) {
-                currentIndex = endBlockIndex + 2;
+    if (startBlockIndex === -1 && startLineIndex === -1) {
+        return { text: lineText.substring(currentIndex), inBlockComment: false };
+    }
+
+    // Construction du résultat
+    let result = '';
+
+    while (currentIndex < lineText.length) {
+        const blockIdx = lineText.indexOf('/*', currentIndex);
+        const lineIdx = lineText.indexOf('//', currentIndex);
+
+        if (blockIdx !== -1 && (lineIdx === -1 || blockIdx < lineIdx)) {
+            result += lineText.substring(currentIndex, blockIdx);
+            const endBlockIdx = lineText.indexOf('*/', blockIdx + 2);
+            if (endBlockIdx !== -1) {
+                currentIndex = endBlockIdx + 2;
             } else {
-                inBlockComment = true;
-                break;
+                return { text: result, inBlockComment: true };
             }
-        } else if (startLineIndex !== -1) {
-            nonCommentText += lineText.substring(currentIndex, startLineIndex);
-            break;
+        } else if (lineIdx !== -1) {
+            result += lineText.substring(currentIndex, lineIdx);
+            return { text: result, inBlockComment: false };
         } else {
-            nonCommentText += lineText.substring(currentIndex);
+            result += lineText.substring(currentIndex);
             break;
         }
     }
 
-    return { text: nonCommentText, inBlockComment };
+    return { text: result, inBlockComment };
 }
 
 /**
  * Supprime les strings d'une expression pour éviter de les analyser
+ * OPTIMISÉ: Utilise des regex pré-compilées
  */
 export function maskStrings(text: string): string {
+    // Reset lastIndex pour les regex globales
+    REGEX_DOUBLE_QUOTES.lastIndex = 0;
+    REGEX_SINGLE_QUOTES.lastIndex = 0;
+
     return text
-        .replace(/"[^"]*"/g, match => ' '.repeat(match.length))
-        .replace(/'(?:\\.|[^\\'])'/g, match => ' '.repeat(match.length));
+        .replace(REGEX_DOUBLE_QUOTES, match => ' '.repeat(match.length))
+        .replace(REGEX_SINGLE_QUOTES, match => ' '.repeat(match.length));
 }
 
 /**
  * Supprime les accès aux champs (obj.field) pour ne garder que les variables de base
+ * OPTIMISÉ: Limite le nombre d'itérations et utilise des regex pré-compilées
  */
 export function maskFieldAccess(text: string): string {
     let result = text;
-    let changed = true;
+    let maxIterations = 10; // Éviter les boucles infinies
 
-    while (changed) {
+    while (maxIterations-- > 0) {
         const before = result;
 
+        // Reset lastIndex pour les regex globales
+        REGEX_FIELD_ACCESS.lastIndex = 0;
+        REGEX_BRACKET_FIELD_ACCESS.lastIndex = 0;
+        REGEX_DOT_FIELD.lastIndex = 0;
+
         // Remplacer variable.champ
-        result = result.replace(/([\p{L}_][\p{L}0-9_]*)\.([\p{L}_][\p{L}0-9_]*)/gu,
-            (match, base, field) => base + ' '.repeat(field.length + 1));
+        result = result.replace(REGEX_FIELD_ACCESS,
+            (_, base, field) => base + ' '.repeat(field.length + 1));
 
         // Remplacer ].champ
-        result = result.replace(/(\])\.([\p{L}_][\p{L}0-9_]*)/gu,
-            (match, bracket, field) => bracket + ' '.repeat(field.length + 1));
+        result = result.replace(REGEX_BRACKET_FIELD_ACCESS,
+            (_, bracket, field) => bracket + ' '.repeat(field.length + 1));
 
         // Supprimer .champ restants
-        result = result.replace(/\.[\p{L}_][\p{L}0-9_]*/gu,
+        result = result.replace(REGEX_DOT_FIELD,
             match => ' '.repeat(match.length));
 
-        changed = (before !== result);
+        if (before === result) break;
     }
 
     return result;
@@ -155,41 +198,42 @@ export function maskFieldAccess(text: string): string {
  * Vérifie si un identifiant est simple (pas d'index ou d'accès aux champs)
  */
 export function isSimpleIdentifier(identifier: string): boolean {
-    return /^[\p{L}_][\p{L}0-9_]*$/u.test(identifier);
+    return REGEX_SIMPLE_IDENTIFIER.test(identifier);
 }
 
 /**
  * Extrait les paramètres d'une signature de fonction
+ * OPTIMISÉ: Boucle for-of et regex pré-compilée
  */
 export function extractFunctionParams(paramsString: string): Array<{ name: string; isInOut: boolean }> {
-    if (!paramsString.trim()) return [];
+    const trimmed = paramsString.trim();
+    if (!trimmed) return [];
 
-    // Trouver la parenthèse fermante qui correspond à l'ouverture des paramètres
+    // Trouver la parenthèse fermante
     let depth = 0;
     let endOfParams = -1;
-    for (let i = 0; i < paramsString.length; i++) {
-        if (paramsString[i] === '(') depth++;
-        else if (paramsString[i] === ')') {
-            depth--;
-            if (depth < 0) {
+    const len = paramsString.length;
+
+    for (let i = 0; i < len; i++) {
+        const c = paramsString[i];
+        if (c === '(') depth++;
+        else if (c === ')') {
+            if (--depth < 0) {
                 endOfParams = i;
                 break;
             }
         }
     }
 
-    // Si on a trouvé une parenthèse fermante, on ne prend que ce qui est avant
-    if (endOfParams !== -1) {
-        paramsString = paramsString.substring(0, endOfParams);
-    }
-
+    const paramStr = endOfParams !== -1 ? paramsString.substring(0, endOfParams) : paramsString;
+    const parts = smartSplitArgs(paramStr);
     const params: Array<{ name: string; isInOut: boolean }> = [];
-    const parts = smartSplitArgs(paramsString);
 
     for (const part of parts) {
-        const [namePart] = part.split(':').map(s => s.trim());
-        const isInOut = /\bInOut\b/i.test(namePart);
-        const name = namePart.replace(/\bInOut\b/i, '').trim();
+        const colonIdx = part.indexOf(':');
+        const namePart = colonIdx !== -1 ? part.substring(0, colonIdx).trim() : part.trim();
+        const isInOut = REGEX_INOUT.test(namePart);
+        const name = namePart.replace(REGEX_INOUT, '').trim();
 
         if (name) {
             params.push({ name, isInOut });
