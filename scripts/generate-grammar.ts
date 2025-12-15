@@ -92,6 +92,19 @@ if (repository['storage']) {
     }
 }
 
+// 5. Constantes (Booléens)
+if (repository['constants']) {
+    const patterns = repository['constants'].patterns;
+    const booleanKeywords = PSC_DEFINITIONS.keywords
+        .filter(k => k.type === 'boolean')
+        .map(k => k.name);
+
+    const booleanPattern = patterns.find((p: any) => p.name === 'constant.language.boolean');
+    if (booleanPattern) {
+        booleanPattern.match = `(?i)\\b(${booleanKeywords.join('|')})\\b`;
+    }
+}
+
 const grammarJson = JSON.stringify(grammar, null, 2);
 fs.writeFileSync(grammarPath, grammarJson, 'utf-8');
 

@@ -1,28 +1,11 @@
+"use strict";
 /**
  * Registre central des définitions pour le langage Pseudo-Code.
  * Ce fichier sert de source de vérité pour les types, fonctions et mots-clés.
  */
-
-export interface PscType {
-    name: string;
-    aliases: string[];
-}
-
-export interface PscFunction {
-    name: string;
-    arity: number;
-    luaHelper: string;
-    isMutator?: boolean; // Si vrai, l'appel est transformé en réaffectation du 1er argument (ex: ajout(l, v) -> l = ajout(l, v))
-    description?: string;
-}
-
-export interface PscKeyword {
-    name: string;
-    type: 'control' | 'block' | 'boolean' | 'operator' | 'io' | 'modifier' | 'other';
-    luaEquivalent?: string;
-}
-
-export const PSC_DEFINITIONS = {
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PSC_DEFINITIONS = void 0;
+exports.PSC_DEFINITIONS = {
     types: [
         { name: 'entier', aliases: ['entier'] },
         { name: 'réel', aliases: ['réel', 'reel'] },
@@ -35,8 +18,7 @@ export const PSC_DEFINITIONS = {
         { name: 'file', aliases: ['file'] },
         { name: 'listesym', aliases: ['listesym'] },
         { name: 'table', aliases: ['table'] }
-    ] as PscType[],
-
+    ],
     keywords: [
         // Contrôle
         { name: 'si', type: 'control', luaEquivalent: 'if' },
@@ -54,39 +36,32 @@ export const PSC_DEFINITIONS = {
         { name: 'décroissant', type: 'control' },
         { name: 'retourner', type: 'control', luaEquivalent: 'return' },
         { name: 'retourne', type: 'control', luaEquivalent: 'return' },
-
         // Blocs
         { name: 'début', type: 'block' },
         { name: 'fin', type: 'block' },
         { name: 'algorithme', type: 'block' },
         { name: 'fonction', type: 'block' },
-
         // Booléens
         { name: 'vrai', type: 'boolean', luaEquivalent: 'true' },
         { name: 'faux', type: 'boolean', luaEquivalent: 'false' },
         { name: 'nil', type: 'boolean', luaEquivalent: 'nil' },
-
         // Opérateurs
         { name: 'et', type: 'operator', luaEquivalent: 'and' },
         { name: 'ou', type: 'operator', luaEquivalent: 'or' },
         { name: 'non', type: 'operator', luaEquivalent: 'not' },
         { name: 'mod', type: 'operator', luaEquivalent: '%' },
-
         // IO
         { name: 'écrire', type: 'io', luaEquivalent: '__psc_write' },
         { name: 'lire', type: 'io', luaEquivalent: 'io.read' },
-
         // Modificateurs
         { name: 'inout', type: 'modifier' }
-    ] as PscKeyword[],
-
+    ],
     functions: [
         // Opérations sur les chaînes
         { name: 'longueur', arity: 1, luaHelper: '#', description: 'Longueur de la chaîne' }, // Traitement spécial dans executor
         { name: 'concat', arity: 2, luaHelper: '..', description: 'Concaténation' }, // Traitement spécial
         { name: 'souschaîne', arity: 3, luaHelper: 'string.sub', description: 'Sous-chaîne' }, // Traitement spécial
         { name: 'ième', arity: 2, luaHelper: 'string.sub', description: 'Caractère à la position i' }, // Traitement spécial
-
         // Fichiers
         { name: 'fichierouvrir', arity: 2, luaHelper: '__psc_fichierOuvrir' },
         { name: 'fichierfermer', arity: 1, luaHelper: '__psc_fichierFermer' },
@@ -95,7 +70,6 @@ export const PSC_DEFINITIONS = {
         { name: 'chaineversentier', arity: 1, luaHelper: '__psc_chaineVersEntier' },
         { name: 'fichiercreer', arity: 1, luaHelper: '__psc_fichierCreer' },
         { name: 'fichierecrire', arity: 2, luaHelper: '__psc_fichierEcrire' },
-
         // TDA Liste
         { name: 'tete', arity: 1, luaHelper: '__psc_generic_tete' },
         { name: 'val', arity: 2, luaHelper: '__psc_liste_val' },
@@ -109,7 +83,6 @@ export const PSC_DEFINITIONS = {
         { name: 'ajoutliste', arity: 3, luaHelper: '__psc_liste_ajout', isMutator: true },
         { name: 'suppressionliste', arity: 2, luaHelper: '__psc_liste_suppression', isMutator: true },
         { name: 'changeliste', arity: 3, luaHelper: '__psc_liste_change', isMutator: true },
-
         // TDA ListeSym
         { name: 'tetels', arity: 1, luaHelper: '__psc_listesym_tete' },
         { name: 'queuels', arity: 1, luaHelper: '__psc_listesym_queue' },
@@ -125,14 +98,12 @@ export const PSC_DEFINITIONS = {
         { name: 'ajoutls', arity: 3, luaHelper: '__psc_listesym_ajout' },
         { name: 'suppressionls', arity: 2, luaHelper: '__psc_listesym_suppression' },
         { name: 'changels', arity: 3, luaHelper: '__psc_listesym_change' },
-
         // TDA Pile
         { name: 'pilevide', arity: 0, luaHelper: '__psc_pile_vide' },
         { name: 'sommet', arity: 1, luaHelper: '__psc_pile_sommet' },
         { name: 'estvidepile', arity: 1, luaHelper: '__psc_pile_est_vide' },
         { name: 'empiler', arity: 2, luaHelper: '__psc_pile_empiler' },
         { name: 'depiler', arity: 1, luaHelper: '__psc_pile_depiler' },
-
         // TDA File
         { name: 'filevide', arity: 0, luaHelper: '__psc_file_vide' },
         { name: 'estvidefile', arity: 1, luaHelper: '__psc_file_est_vide' },
@@ -142,7 +113,6 @@ export const PSC_DEFINITIONS = {
         { name: 'ajoutfile', arity: 2, luaHelper: '__psc_file_enfiler' }, // Alias
         { name: 'suppressionfile', arity: 1, luaHelper: '__psc_file_defiler' }, // Alias
         { name: 'estfilevide', arity: 1, luaHelper: '__psc_file_est_vide' }, // Alias
-
         // TDA Table (Dictionnaire/Map: Clé -> Valeur)
         { name: 'tablevide', arity: 0, luaHelper: '__psc_table_vide' },
         { name: 'domaine', arity: 1, luaHelper: '__psc_table_domaine' },
@@ -151,5 +121,5 @@ export const PSC_DEFINITIONS = {
         { name: 'suppressiontable', arity: 2, luaHelper: '__psc_table_suppression', isMutator: true },
         { name: 'changetable', arity: 3, luaHelper: '__psc_table_change', isMutator: true },
         { name: 'estdans', arity: 2, luaHelper: '__psc_ensemble_estdans' }
-    ] as PscFunction[]
+    ]
 };

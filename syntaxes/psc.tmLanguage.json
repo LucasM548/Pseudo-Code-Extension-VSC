@@ -198,7 +198,7 @@
         },
         {
           "name": "constant.language.boolean",
-          "match": "(?i)\\b(vrai|faux)\\b"
+          "match": "(?i)\\b(vrai|faux|nil)\\b"
         },
         {
           "name": "constant.language",
