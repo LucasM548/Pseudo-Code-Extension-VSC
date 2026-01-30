@@ -259,12 +259,8 @@ export function transpileToLua(pscCode: string): string {
         }
         if (!lineIsFullyProcessed && /^\s*[\p{L}0-9_]+\s*←\s*lire\s*\(\s*\)\s*$/iu.test(trimmedLine)) {
             const varName = trimmedLine.split('←')[0].trim();
-            const varType = normalizeType((variableTypes.get(varName) || '').toLowerCase());
-            if (varType === 'entier' || varType === 'réel') {
-                trimmedLine = `${varName} = tonumber(io.read())`;
-            } else {
-                trimmedLine = `${varName} = io.read()`;
-            }
+            // Utiliser __psc_lire() qui convertit automatiquement en nombre si possible
+            trimmedLine = `${varName} = __psc_lire()`;
             lineIsFullyProcessed = true;
         }
 
@@ -560,7 +556,7 @@ export function transpileToLua(pscCode: string): string {
 
             trimmedLine = trimmedLine
                 .replace(/\s*←\s*/g, ' = ')
-                .replace(/lire\s*\(\)/gi, 'io.read()');
+                .replace(/lire\s*\(\)/gi, '__psc_lire()');
 
             // Nettoyer les marqueurs de table
             trimmedLine = trimmedLine.replace(/__PSC_TABLE_START__/g, '').replace(/__PSC_TABLE_END__/g, '');
