@@ -310,9 +310,18 @@ export function transpileToLua(pscCode: string): string {
 
             if (!lineIsFullyProcessed) {
                 if (/^\s*Pour\s/i.test(trimmedLine)) {
-                    isForLoop = true;
-                    let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
-                    trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                    // Vérifier si c'est une boucle d'itération sur table (Pour cle de table Faire)
+                    const tableIterMatch = /^\s*Pour\s+([\p{L}_][\p{L}0-9_]*)\s+de\s+([\p{L}_][\p{L}0-9_]*)\s+Faire\s*:?\s*$/iu.exec(trimmedLine);
+                    if (tableIterMatch) {
+                        const iterVar = tableIterMatch[1];
+                        const tableVar = tableIterMatch[2];
+                        trimmedLine = `for ${iterVar}, _ in pairs(${tableVar}._data) do`;
+                    } else {
+                        // Boucle classique
+                        isForLoop = true;
+                        let step = /\bdécroissant\b/i.test(trimmedLine) ? ', -1' : ', 1';
+                        trimmedLine = trimmedLine.replace(/\bdécroissant\b/i, '').replace(/^\s*Pour\s+([\p{L}0-9_]+)\s+(?:allant de|de)\s+(.+)\s+(?:a|à)\s+(.+)\s+Faire\s*:?/iu, `for $1 = $2, $3${step} do`);
+                    }
                 } else if (/^\s*Tant que\b/i.test(trimmedLine)) {
                     trimmedLine = trimmedLine.replace(/^\s*Tant que\b/i, 'while').replace(/\s+Faire\s*:?/i, ' do');
                 } else if (/^\s*Si\b/i.test(trimmedLine)) {
@@ -418,7 +427,54 @@ export function transpileToLua(pscCode: string): string {
             // On trie par longueur décroissante pour éviter qu'un préfixe remplace un nom plus long
             const sortedFunctions = [...PSC_DEFINITIONS.functions].sort((a, b) => b.name.length - a.name.length);
 
+            // Traiter les fonctions mutateurs en premier (celles qui modifient le premier argument)
+            const mutatorsHandled = new Set<string>();
+
             for (const func of sortedFunctions) {
+                if (func.isMutator) {
+                    // Pattern pour capturer les appels de fonction mutateur
+                    const funcCallRegex = new RegExp(`\\b(${func.name})\\s*\\(([^)]+)\\)`, 'giu');
+                    let match: RegExpExecArray | null;
+                    const newLine: string[] = [];
+                    let lastIndex = 0;
+
+                    while ((match = funcCallRegex.exec(trimmedLine)) !== null) {
+                        const fullCall = match[0];
+                        const argsStr = match[2];
+                        const args = smartSplitArgs(argsStr);
+
+                        if (args.length > 0) {
+                            const firstArg = args[0].trim();
+                            // Vérifier si ce n'est pas déjà une affectation
+                            const beforeCall = trimmedLine.substring(0, match.index);
+                            const isAlreadyAssignment = /[\w\s,]+\s*=\s*$/.test(beforeCall);
+
+                            if (!isAlreadyAssignment && !/^\s*(if|while|elseif|return)\b/i.test(trimmedLine)) {
+                                // Transformer en affectation: firstArg = func(firstArg, ...)
+                                newLine.push(trimmedLine.substring(lastIndex, match.index));
+                                newLine.push(`${firstArg} = ${func.luaHelper}(${argsStr})`);
+                                lastIndex = match.index + fullCall.length;
+                                mutatorsHandled.add(func.name.toLowerCase());
+                            }
+                        }
+                    }
+
+                    if (lastIndex > 0) {
+                        newLine.push(trimmedLine.substring(lastIndex));
+                        trimmedLine = newLine.join('');
+                    }
+                }
+            }
+
+            // Ensuite, remplacer les autres fonctions normalement
+            const specialStringFunctions = new Set(['longueur', 'concat', 'ième', 'souschaîne']);
+
+            for (const func of sortedFunctions) {
+                // Sauter si déjà traité comme mutateur ou fonction spéciale de chaîne
+                if (mutatorsHandled.has(func.name.toLowerCase()) || specialStringFunctions.has(func.name.toLowerCase())) {
+                    continue;
+                }
+
                 // Utiliser une regex qui respecte les frontières de mots pour éviter les remplacements partiels
                 const re = new RegExp(`(?<![\\p{L}0-9_])${func.name}\\b`, 'giu');
                 trimmedLine = trimmedLine.replace(re, func.luaHelper);
