@@ -329,18 +329,25 @@ export function transpileToLua(pscCode: string): string {
                     trimmedLine = `function ${funcInfo.name}(${paramNames})`;
                 }
             } else {
-                const callRegex = /([\p{L}_][\p{L}0-9_]+)\s*\(([^)]*)\)/gu;
+                // Match function calls with proper nested parenthesis handling
+                const funcCallRegex = /([\p{L}_][\p{L}0-9_]+)\s*\(/gu;
                 let match;
                 if (!/^\s*si|tant que|pour|écrire/i.test(trimmedLine)) {
-                    while ((match = callRegex.exec(trimmedLine)) !== null) {
+                    while ((match = funcCallRegex.exec(trimmedLine)) !== null) {
                         const funcName = match[1];
                         const funcInfo = functionRegistry.get(funcName);
                         if (funcInfo && funcInfo.inOutParamNames.length > 0) {
-                            const args = match[2].split(',').map(a => a.trim());
+                            // Use findMatchingParen to correctly handle nested parens
+                            const openIdx = match.index + match[0].length - 1;
+                            const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                            if (closeIdx === -1) continue;
+
+                            const argsStr = trimmedLine.slice(openIdx + 1, closeIdx);
+                            const args = smartSplitArgs(argsStr);
                             const varsToReassign = functionRegistry.getInOutArgsToReassign(funcName, args);
 
                             if (varsToReassign.length > 0) {
-                                const callExpression = match[0];
+                                const callExpression = trimmedLine.slice(match.index, closeIdx + 1);
                                 if (trimmedLine.includes('←')) {
                                     const parts = trimmedLine.split('←');
                                     const lhs = parts[0].trim();
@@ -355,7 +362,6 @@ export function transpileToLua(pscCode: string): string {
                     }
                 }
             }
-
             if (!lineIsFullyProcessed) {
                 if (REGEX_POUR_LOOP.test(trimmedLine)) {
                     // Vérifier si c'est une boucle d'itération sur table
@@ -391,47 +397,101 @@ export function transpileToLua(pscCode: string): string {
             // Syntaxes explicites pour créer chaque type de structure
 
             // 1. liste(a, b, c) → __psc_liste_from_table({a, b, c})
-            trimmedLine = trimmedLine.replace(/\bliste\s*\(([^)]*)\)/gi, (match, args) => {
-                const closePos = findMatchingParen(match, match.indexOf('('));
-                if (closePos !== -1) {
-                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
-                    return `__psc_liste_from_table({${innerArgs}})`;
+            // Use manual matching to handle nested parentheses like Liste(Etudiant(...), ...)
+            // Skip type annotations (preceded by colon, e.g. ": Liste(Etudiant)")
+            {
+                const listeRegex = /\bliste\s*\(/gi;
+                let listeMatch;
+                while ((listeMatch = listeRegex.exec(trimmedLine)) !== null) {
+                    // Check if this is a type annotation (preceded by colon)
+                    const beforeMatch = trimmedLine.slice(0, listeMatch.index);
+                    const isTypeAnnotation = /:\s*$/.test(beforeMatch);
+                    if (isTypeAnnotation) {
+                        continue; // Skip type annotations
+                    }
+
+                    const openIdx = listeMatch.index + listeMatch[0].length - 1;
+                    const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                    if (closeIdx !== -1) {
+                        const args = trimmedLine.slice(openIdx + 1, closeIdx);
+                        const before = trimmedLine.slice(0, listeMatch.index);
+                        const after = trimmedLine.slice(closeIdx + 1);
+                        trimmedLine = before + `__psc_liste_from_table({${args}})` + after;
+                        listeRegex.lastIndex = 0; // Reset to re-scan from start
+                    }
                 }
-                return `__psc_liste_from_table({${args}})`;
-            });
+            }
 
             // 2. listeSym(a, b, c) → __psc_listesym_from_table({a, b, c})
-            trimmedLine = trimmedLine.replace(/\blisteSym\s*\(([^)]*)\)/gi, (match, args) => {
-                const closePos = findMatchingParen(match, match.indexOf('('));
-                if (closePos !== -1) {
-                    const innerArgs = match.slice(match.indexOf('(') + 1, closePos);
-                    return `__psc_listesym_from_table({${innerArgs}})`;
+            {
+                const listeSymRegex = /\blisteSym\s*\(/gi;
+                let listeSymMatch;
+                while ((listeSymMatch = listeSymRegex.exec(trimmedLine)) !== null) {
+                    const openIdx = listeSymMatch.index + listeSymMatch[0].length - 1;
+                    const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                    if (closeIdx !== -1) {
+                        const args = trimmedLine.slice(openIdx + 1, closeIdx);
+                        const before = trimmedLine.slice(0, listeSymMatch.index);
+                        const after = trimmedLine.slice(closeIdx + 1);
+                        trimmedLine = before + `__psc_listesym_from_table({${args}})` + after;
+                        listeSymRegex.lastIndex = 0;
+                    }
                 }
-                return `__psc_listesym_from_table({${args}})`;
-            });
+            }
 
             // 3. pile(a, b, c) → pile avec éléments initiaux
-            trimmedLine = trimmedLine.replace(/\bpile\s*\(([^)]*)\)/gi, (match, args) => {
-                if (args.trim() === '') {
-                    return '__psc_pile_vide()';
+            {
+                const pileRegex = /\bpile\s*\(/gi;
+                let pileMatch;
+                while ((pileMatch = pileRegex.exec(trimmedLine)) !== null) {
+                    const openIdx = pileMatch.index + pileMatch[0].length - 1;
+                    const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                    if (closeIdx !== -1) {
+                        const args = trimmedLine.slice(openIdx + 1, closeIdx);
+                        const before = trimmedLine.slice(0, pileMatch.index);
+                        const after = trimmedLine.slice(closeIdx + 1);
+                        const replacement = args.trim() === '' ? '__psc_pile_vide()' : `__psc_pile_from_values({${args}})`;
+                        trimmedLine = before + replacement + after;
+                        pileRegex.lastIndex = 0;
+                    }
                 }
-                return `__psc_pile_from_values({${args}})`;
-            });
+            }
 
             // 4. file(a, b, c) → file avec éléments initiaux
-            trimmedLine = trimmedLine.replace(/\bfile\s*\(([^)]*)\)/gi, (match, args) => {
-                if (args.trim() === '') {
-                    return '__psc_file_vide()';
+            {
+                const fileRegex = /\bfile\s*\(/gi;
+                let fileMatch;
+                while ((fileMatch = fileRegex.exec(trimmedLine)) !== null) {
+                    const openIdx = fileMatch.index + fileMatch[0].length - 1;
+                    const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                    if (closeIdx !== -1) {
+                        const args = trimmedLine.slice(openIdx + 1, closeIdx);
+                        const before = trimmedLine.slice(0, fileMatch.index);
+                        const after = trimmedLine.slice(closeIdx + 1);
+                        const replacement = args.trim() === '' ? '__psc_file_vide()' : `__psc_file_from_values({${args}})`;
+                        trimmedLine = before + replacement + after;
+                        fileRegex.lastIndex = 0;
+                    }
                 }
-                return `__psc_file_from_values({${args}})`;
-            });
+            }
 
             // 5. Table("Alice" → "1234", "Bob" → "5678") → table avec paires clé-valeur
-            trimmedLine = trimmedLine.replace(/\bTable\s*\(([^)]+)\)/gi, (match, args) => {
-                // Remplacer les flèches → par des virgules pour séparer clés et valeurs
-                const normalizedArgs = args.replace(/\s*→\s*/g, ', ');
-                return `__psc_table_from_pairs(${normalizedArgs})`;
-            });
+            {
+                const tableRegex = /\bTable\s*\(/gi;
+                let tableMatch;
+                while ((tableMatch = tableRegex.exec(trimmedLine)) !== null) {
+                    const openIdx = tableMatch.index + tableMatch[0].length - 1;
+                    const closeIdx = findMatchingParen(trimmedLine, openIdx);
+                    if (closeIdx !== -1) {
+                        const args = trimmedLine.slice(openIdx + 1, closeIdx);
+                        const before = trimmedLine.slice(0, tableMatch.index);
+                        const after = trimmedLine.slice(closeIdx + 1);
+                        const normalizedArgs = args.replace(/\s*→\s*/g, ', ');
+                        trimmedLine = before + `__psc_table_from_pairs(${normalizedArgs})` + after;
+                        tableRegex.lastIndex = 0;
+                    }
+                }
+            }
 
             // ========== TRAITEMENT SPÉCIAL DES FONCTIONS DE CHAÎNES ==========
             // Ces fonctions ne se mappent pas directement à des fonctions Lua
